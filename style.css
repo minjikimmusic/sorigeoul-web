@@ -1,0 +1,569 @@
+:root {
+  --bg: #F3EEE4;
+  --card: #FCFAF4;
+  --ink: #191C21;
+  --muted: #767C85;
+  --line: #DED8CB;
+  --expert: #2F4A6E;
+  --student: #C06A2D;
+  --shade: rgba(230, 200, 120, 0.28);
+  --notice-bg: #F6E6D8;
+  --card-lift: #FFFDF7;
+  --line-strong: #BEB29A;
+  /* 첫 화면 — 저채도 2색(쪽빛·황토)과 먹빛. 큰 검은 면도 화려한 그라데이션도 쓰지 않는다. */
+  --paper: #F2EFE7;       /* 아이보리 바탕 */
+  --surface: #FBFAF6;     /* 카드 */
+  --surface-lift: #FFFFFF;
+  --ink-2: #454B55;
+  --line-2: #B9AF9C;
+  --indigo: #23385A;      /* 쪽빛 — 선생님 소리 */
+  --terra: #A85B36;       /* 황토 — 내 소리 */
+  --col: 1480px;          /* 단 폭 */
+  --gut: clamp(22px, 4.2vw, 76px);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink);
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; font-size: 17px; }
+button { font: inherit; cursor: pointer; }
+[hidden] { display: none !important; }
+
+.topbar { display: flex; align-items: center; gap: 14px; padding: 14px 24px; }
+.brand { background: none; border: 0; font-size: 26px; font-weight: 800; letter-spacing: 0.04em; color: var(--ink); padding: 0; }
+.topbar-song { color: var(--muted); font-size: 16px; }
+/* 상단바 오른쪽 묶음(스피커 + 처음으로). 여기서 오른쪽 정렬을 맡으므로 안쪽 .icon-btn 의
+   margin-left:auto 는 꺼 둔다 — 둘 다 auto 면 남는 공간이 둘로 나뉘어 사이가 벌어진다. */
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.topbar-right .icon-btn { margin-left: 0; }
+/* 상단바용 작은 버튼. 본문 .btn 보다 한 치수 작게 잡아 제목 줄을 누르지 않게 한다.
+   .btn 이 이 파일 뒤쪽에 있어 한 클래스끼리는 그쪽이 이긴다 → .topbar 를 앞에 붙여
+   우선순위를 올린다. 겸해서 스타일이 상단바 밖으로 새지 않는다.
+   높이를 스피커 버튼(42px)과 맞춰 둘이 나란히 앉게 한다. */
+.topbar .topbar-btn {
+  padding: 0 16px; height: 42px; font-size: 15px; font-weight: 700;
+  color: var(--ink-2); white-space: nowrap;
+}
+.icon-btn { margin-left: auto; background: var(--card); border: 1px solid var(--line); border-radius: 50%; width: 42px; height: 42px; font-size: 20px; }
+.icon-btn.off { opacity: 0.45; }
+
+.screen { position: relative; max-width: 1040px; margin: 0 auto; padding: 8px 24px 48px; }
+h1 { font-size: 30px; margin: 8px 0 6px; }
+.sub { color: var(--muted); margin: 0 0 22px; }
+.note { color: var(--muted); font-size: 14px; margin-top: 18px; }
+
+/* ============================================================
+   ① 곡 선택 — 소리를 비추는 거울
+   이 화면의 조형은 F0 가락선 하나뿐이다. 전통 물건을 그려 넣지 않는다.
+   한국적인 구조는 장식이 아니라 시스템 안에 둔다:
+     · 정간보의 칸 → 화면의 세로 격자
+     · 한지 → 바탕의 결
+     · 쪽빛·황토 → 저채도 2색
+   아래 규칙은 전부 첫 화면 안으로 한정된다.
+   ============================================================ */
+
+body:has(#screen-select:not([hidden])) { min-height: 100dvh; display: flex; flex-direction: column;
+  background: var(--paper); }
+body:has(#screen-select:not([hidden])) #screen-select { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+body:has(#screen-select:not([hidden])) .topbar { width: 100%; max-width: var(--col); margin: 0 auto;
+  padding: clamp(9px, 1.5vh, 18px) var(--gut) 0; }
+/* 첫 화면에서 '소리거울'은 이 사이트의 이름이자 표제다. 가장 크게 둔다. */
+body:has(#screen-select:not([hidden])) .brand { font-size: clamp(30px, 3.4vw, 52px); font-weight: 800;
+  letter-spacing: -0.03em; color: var(--ink); line-height: 1.05; }
+/* 바탕의 결. 색면을 깔지 않는다 — 화면이 베이지로 흐려지는 원인이었다. */
+body:has(#screen-select:not([hidden]))::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .55;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85 .35' numOctaves='3'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.055'/%3E%3C/svg%3E"); }
+
+#screen-select { max-width: var(--col); width: 100%; padding: 0 var(--gut) clamp(8px, 1.1vh, 14px); }
+
+.landing { position: relative; isolation: isolate; flex: 1 1 auto;
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; row-gap: clamp(4px, 0.7vh, 10px);
+  overflow-x: clip; }
+
+/* ---- 표제 ---- */
+.landing-lede { grid-row: 1; position: relative; z-index: 3; max-width: min(760px, 100%); padding-top: clamp(2px, 0.7vh, 10px); }
+#screen-select .eyebrow { margin: 0 0 6px; color: var(--terra);
+  font-size: clamp(13px, 1vw, 15.5px); font-weight: 700; letter-spacing: -0.008em;
+  line-height: 1.4; word-break: keep-all; }
+#screen-select .eyebrow::before { content: ""; display: inline-block; width: 26px; height: 1px;
+  background: var(--terra); vertical-align: middle; margin-right: 10px; opacity: .8; }
+/* 표제는 이름 아래를 받치는 한 마디다. 이름보다 작게 둔다. */
+#screen-select h1 { font-size: clamp(23px, 2.5vw, 37px); font-weight: 700; line-height: 1.18;
+  letter-spacing: -0.028em; margin: 0 0 7px; color: var(--ink); word-break: keep-all; }
+#screen-select .sub { font-size: clamp(14.5px, 1.05vw, 17px); line-height: 1.40; margin: 0;
+  max-width: 46ch; color: var(--ink-2); word-break: keep-all; text-wrap: pretty; }
+#screen-select .sub span { display: block; }
+/* 마지막 한 줄은 부르는 말이다. 조금 더 또렷하게 둔다. */
+#screen-select .lede-call { margin: 6px 0 0; color: var(--indigo); font-weight: 700;
+  font-size: clamp(15px, 1.15vw, 18.5px); letter-spacing: -0.018em; word-break: keep-all; }
+#screen-select .note { grid-row: 4; position: relative; z-index: 3; margin-top: 14px; }
+
+/* ---- 거울 표식(우상단) — 연구자 제공 그림 ----
+   · 비율 유지: 가로만 정하고 세로는 auto. object-fit 을 쓰지 않으므로 잘리지 않는다.
+   · 크기: 데스크톱 135~165px. 화면이 좁아지면 10.9vw 를 따라 자연스럽게 줄어든다.
+   · 원본이 390px 이라 165px 로 표시해도 레티나(2배)에서 330px — 늘려 쓰지 않는다.
+   · 그림자·테두리는 넣지 않는다(화면의 미니멀한 결을 지킨다). */
+.mirror-mark { position: absolute; z-index: 2; pointer-events: none;
+  top: clamp(-2px, 0.8vh, 12px); right: 0;
+  width: clamp(133px, 14.2vw, 215px); height: auto; }
+@media (max-width: 900px) { .mirror-mark { width: 98px; top: 0; } }
+/* 좁은 화면에서는 표제 글줄이 오른쪽까지 차서 표식과 겹친다 — 여기서만 더 줄인다. */
+@media (max-width: 620px) { .mirror-mark { width: 82px; } }
+
+/* ---- 거울: 소리가 흐르고, 비치고, 둘로 갈라지는 자리 ----
+   화면 좌우 끝까지 내보낸다. 이 선이 이 사이트의 정체다. */
+/* 가로세로 비를 viewBox 와 같게 못박는다. 그래야 어떤 화면 폭에서도
+   가락의 봉우리가 잘리지 않고, 좌우로는 화면 끝까지 꽉 찬다. */
+.stage { grid-row: 2; position: relative; z-index: 1; display: block; width: 100vw;
+  aspect-ratio: 1400 / 264; height: auto; align-self: center;
+  margin-left: calc(50% - 50vw); pointer-events: none; }
+.stage path, .stage use { vector-effect: non-scaling-stroke; }
+.stage path { stroke-linecap: round; stroke-linejoin: round; }
+
+/* 정간보의 칸 — 시간의 격자. 읽히지 않을 만큼만 둔다. */
+.grid .g-col { stroke: var(--indigo); stroke-width: 1; opacity: .11; }
+.grid .g-bak { stroke: var(--indigo); stroke-width: 1; opacity: .05; }
+
+/* 거울면 — 거울을 그리지 않고, 빛이 서는 자리만 남긴다 */
+.plane-edge { stroke: var(--indigo); stroke-width: 1; opacity: .26; stroke-dasharray: 2 8; }
+/* 소리가 갈라지는 바로 그 점 */
+.plane-node { fill: var(--paper); stroke: var(--indigo); stroke-width: 1.6; opacity: .85; }
+.plane-node-ring { fill: none; stroke: var(--indigo); stroke-width: 1; opacity: .3; }
+/* 거울면(본청) — 이 선을 축으로 소리가 비친다 */
+.axis { stroke: var(--indigo); stroke-width: 1; opacity: .3; stroke-dasharray: 1 5; }
+
+/* 소리 그 자체 */
+.mc-solo { stroke: var(--indigo); stroke-width: 2.1; opacity: .92; }
+.mc-teacher { stroke: var(--indigo); stroke-width: 2.1; opacity: .9; }
+.mc-student { stroke: var(--terra); stroke-width: 1.7; opacity: .8; }
+/* 두 소리가 벌어진 만큼이 면으로 남는다. 겹치는 곳에서는 저절로 사라진다. */
+.mc-ribbon { fill: var(--terra); opacity: .1; }
+
+/* 갈라진 두 선의 이름. 범례를 따로 두지 않고 선 위에 직접 얹는다. */
+.mc-tag { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px;
+  font-weight: 600; letter-spacing: 0.08em; text-anchor: middle; }
+.mc-tag--t { fill: var(--indigo); opacity: .85; }
+.mc-tag--s { fill: var(--terra); opacity: .85; }
+
+/* 비친 소리 — 거울의 깊이. 읽는 대상이 아니라 공간감이다. */
+/* 비친 소리가 읽혀야 이 화면이 '거울'이 된다. 흐리기만 하면 얼룩으로 보인다. */
+.reflection { opacity: .6; }
+.reflection-far { opacity: .16; }
+
+/* 카드에 마우스를 올리면 그 자리의 가락이 살아난다 */
+.mc-hl { stroke: var(--indigo); stroke-width: 3; opacity: 0; transition: opacity .3s ease; }
+#screen-select:has(.song-card[data-song="arirang"]:hover) .mc-hl--arirang,
+#screen-select:has(.song-card[data-song="arirang"]:focus-visible) .mc-hl--arirang,
+#screen-select:has(.song-card[data-song="jindo"]:hover) .mc-hl--jindo,
+#screen-select:has(.song-card[data-song="jindo"]:focus-visible) .mc-hl--jindo,
+#screen-select:has(.song-card[data-song="kwaejina"]:hover) .mc-hl--kwaejina,
+#screen-select:has(.song-card[data-song="kwaejina"]:focus-visible) .mc-hl--kwaejina,
+#screen-select:has(.song-card[data-song="geumdaraekkung"]:hover) .mc-hl--geumdaraekkung,
+#screen-select:has(.song-card[data-song="geumdaraekkung"]:focus-visible) .mc-hl--geumdaraekkung { opacity: .95; }
+
+/* ---- 곡 고르기 ---- */
+.picker { grid-row: 3; position: relative; z-index: 3; }
+.picker-label { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.15em;
+  text-transform: uppercase; color: var(--muted);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  display: flex; align-items: center; gap: 12px; }
+.picker-label::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--line); }
+
+.song-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(12px, 1.3vw, 20px); align-items: stretch; }
+.song-card { position: relative; overflow: hidden; text-align: left; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  min-height: clamp(190px, 25vh, 260px);
+  padding: clamp(12px, 1vw, 17px) clamp(17px, 1.35vw, 24px) clamp(11px, 0.9vw, 15px);
+  color: var(--ink);
+  transition: border-color .22s ease, background-color .22s ease, transform .22s ease, box-shadow .22s ease; }
+/* 왼쪽 모서리에 서는 쪽빛 한 줄 — 고르면 그 소리가 켜진다는 표시 */
+.song-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+  background: var(--indigo); transform: scaleY(0); transform-origin: 50% 0;
+  transition: transform .28s cubic-bezier(.2,.7,.3,1); }
+.song-card:hover, .song-card:focus-visible { border-color: var(--line-2); background: var(--surface-lift);
+  transform: translateY(-3px); box-shadow: 0 10px 26px rgba(25,28,33,.09); }
+.song-card:hover::before, .song-card:focus-visible::before { transform: scaleY(1); }
+.song-card:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+
+.sc-no { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; font-weight: 600;
+  letter-spacing: 0.1em; color: var(--muted); }
+/* 그 곡의 서명 — 토리의 성격이 선 모양에 들어 있다 */
+.sc-sig { display: block; width: 100%; height: clamp(50px, 7.4vh, 86px); margin: 9px 0 11px; overflow: visible; }
+.sc-sig path { fill: none; stroke: var(--indigo); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+  opacity: .5; vector-effect: non-scaling-stroke;
+  transition: opacity .25s ease, stroke-width .25s ease, stroke .25s ease; }
+.song-card:hover .sc-sig path, .song-card:focus-visible .sc-sig path {
+  opacity: 1; stroke-width: 2.1; animation: sig-draw .78s cubic-bezier(.3,.75,.35,1); }
+@keyframes sig-draw { from { stroke-dasharray: 1; stroke-dashoffset: 1; } to { stroke-dasharray: 1; stroke-dashoffset: 0; } }
+
+.song-card b { display: block; font-size: clamp(19px, 1.5vw, 26px); font-weight: 800;
+  letter-spacing: -0.025em; line-height: 1.2; margin-bottom: 5px; word-break: keep-all; }
+.song-card .sc-tori { display: block; font-size: 13.5px; line-height: 1.45; color: var(--indigo);
+  font-weight: 600; word-break: keep-all; }
+.song-card .sc-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 9px;
+  font-size: 11.5px; letter-spacing: 0.04em; color: var(--muted);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.song-card .sc-meta i { font-style: normal; }
+.song-card .sc-meta i + i::before { content: "·"; margin-right: 8px; opacity: .6; }
+
+/* ---- 세로가 짧은 노트북(≈1366×680 등) ----
+   그래프는 손대지 않는다. SVG 가 preserveAspectRatio="…slice" 라 높이를 줄이면
+   아래쪽부터 잘리는데, 거기가 바로 거울 반사가 있는 자리다.
+   대신 vh 로 안 줄어드는 '바닥값'들(카드 min-height, 가락 조각 최소 높이)과
+   남은 세로 여백을 여기서 한 번 더 조인다. */
+@media (max-height: 780px) {
+  body:has(#screen-select:not([hidden])) .topbar { padding-top: 6px; }
+  .landing-lede { padding-top: 2px; }
+  #screen-select .eyebrow { margin-bottom: 4px; }
+  #screen-select h1 { margin-bottom: 5px; }
+  #screen-select .sub { line-height: 1.32; }
+  #screen-select .lede-call { margin-top: 4px; }
+  .picker-label { margin-bottom: 5px; }
+  .song-card { min-height: 0; padding: 10px clamp(17px, 1.35vw, 24px) 9px; }
+  .sc-sig { height: clamp(34px, 5vh, 56px); margin: 6px 0 8px; }
+  .song-card .sc-meta { padding-top: 7px; }
+  #screen-select { padding-bottom: 6px; }
+}
+
+@media (max-width: 1000px) {
+  body:has(#screen-select:not([hidden])) { min-height: 0; display: block; }
+  /* 그리드를 풀면 마크업 순서(무대가 먼저)로 돌아가 제목이 가락선 아래로 밀린다.
+     세로 flex 로 바꾸고 순서를 못박아 읽는 차례를 지킨다. */
+  .landing { display: flex; flex-direction: column; }
+  .landing-lede { order: 1; max-width: 100%; }
+  .stage { order: 2; height: 46vh; min-height: 260px; aspect-ratio: auto;
+    margin: 20px 0 26px calc(50% - 50vw); }
+  .picker { order: 3; }
+  #screen-select .note { order: 4; }
+  .song-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .stage { height: 34vh; min-height: 200px; }
+  .song-grid { grid-template-columns: 1fr; }
+  .song-card { min-height: 0; }
+  .sc-sig { height: clamp(46px, 7vh, 70px); margin: 12px 0 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .song-card, .mc-hl, .song-card::before, .sc-sig path { transition: none; }
+  .song-card:hover .sc-sig path, .song-card:focus-visible .sc-sig path { animation: none; }
+  .song-card:hover, .song-card:focus-visible { transform: none; }
+}
+
+/* 준비 화면 */
+.intro-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.tag { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 14px; color: var(--muted); }
+.score { margin: 0 0 16px; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+.score img { display: block; width: 100%; max-width: 760px; margin: 0 auto; }
+.score figcaption { text-align: right; color: var(--muted); font-size: 13px; margin-top: 6px; }
+.jangdan-score { margin-bottom: 10px; padding: 10px 14px 8px; }
+.jangdan-score img { max-width: 540px; }
+
+/* 움직이는 정간보 — 장단 듣기를 누르면 소박마다 불이 들어오고 타점이 커진다 */
+.jeonggan { display: flex; max-width: 540px; margin: 10px auto 0; border: 1.5px solid var(--ink);
+  border-radius: 4px; overflow: hidden; background: #fff; }
+.jeonggan .bak { display: flex; flex: 1; border-right: 1.5px solid var(--ink); }
+.jeonggan .bak:last-child { border-right: 0; }
+.jeonggan .sobak { flex: 1; border-right: 1px dotted #B9B1A1; padding: 6px 0 4px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  transition: background .08s linear; }
+.jeonggan .bak .sobak:last-child { border-right: 0; }
+.jeonggan .sobak.on { background: #F4E9CE; }
+.jeonggan .sym { height: 30px; display: grid; place-items: center;
+  transition: transform .09s ease-out; transform-origin: center; }
+.jeonggan .sobak.hit .sym { transform: scale(1.55); }
+.jeonggan .sym svg { display: block; }
+.jeonggan .gu { font-size: 15px; font-weight: 700; color: var(--ink); min-height: 20px;
+  transition: transform .09s ease-out, color .09s linear; }
+.jeonggan .sobak.hit .gu { transform: scale(1.3); color: var(--student); }
+@media (prefers-reduced-motion: reduce) {
+  .jeonggan .sym, .jeonggan .gu { transition: none; }
+  .jeonggan .sobak.hit .sym, .jeonggan .sobak.hit .gu { transform: none; }
+}
+
+/* 오선보 + 정간보 함께 보기 — 장단 그림에서 오선보만 오려 코드 정간보 위에 얹는다.
+   오려내기 좌표는 jangdan.js 가 config 의 staff_crop 을 %로 바꿔 style 로 넣는다.
+   오선보는 정지 화면이고, 아래 정간보만 소리에 맞춰 움직인다. */
+.jangdan-stack { max-width: 540px; margin: 10px auto 0; }
+.jangdan-staff { position: relative; overflow: hidden; background: #fff;
+  border-radius: 4px; line-height: 0; }
+.jangdan-staff img { position: absolute; display: block; max-width: none; }
+/* 정간보가 바로 아래 붙으므로 위쪽 여백을 줄여 두 기보법을 한 덩어리로 보이게 한다 */
+.jangdan-stack .jeonggan { margin-top: 4px; }
+
+/* 움직이는 장단 그림 — 연구자가 준 정간보 그림 위에 재생 위치를 겹친다.
+   칸 좌표는 jangdan.js 가 config 의 score_image_grid 를 %로 바꿔 style 로 넣는다.
+   그림이 불투명한 흰 배경이라 강조 띠는 multiply 로 깔아야 인쇄된 기호가 덮이지 않는다. */
+.jangdan-img { position: relative; max-width: 540px; margin: 10px auto 0; line-height: 0; }
+.jangdan-img img { display: block; width: 100%; }
+.jangdan-img .overlay { position: absolute; display: flex; pointer-events: none; }
+.jangdan-img .cell { position: relative; flex: 1; transition: background-color .08s linear; }
+.jangdan-img .cell.on { background: #F4E9CE; mix-blend-mode: multiply; }
+
+/* 타점이 놓인 소박은 지날 때 테두리가 한 번 부푼다.
+   그림에 인쇄된 기호는 키울 수 없으므로 칸 자체를 강조한다. */
+.jangdan-img .cell::after { content: ""; position: absolute; inset: 0;
+  border: 2px solid transparent; border-radius: 3px;
+  transition: border-color .09s linear, transform .09s ease-out; }
+.jangdan-img .cell.hit::after { border-color: var(--student); transform: scaleY(1.06); }
+
+/* 재생선 — 소박 칸과 달리 매 프레임 움직이므로 장단 진행이 이어져 보인다 */
+.jangdan-img .playhead { position: absolute; top: -4px; bottom: -4px; width: 2px;
+  margin-left: -1px; background: var(--student); border-radius: 2px; opacity: 0;
+  box-shadow: 0 0 6px rgba(192, 106, 45, 0.5); }
+.jangdan-img .playhead.on { opacity: 1; }
+.jangdan-img .playhead::before { content: ""; position: absolute; top: -5px; left: -4px;
+  border-left: 5px solid transparent; border-right: 5px solid transparent;
+  border-top: 6px solid var(--student); }
+@media (prefers-reduced-motion: reduce) {
+  .jangdan-img .cell, .jangdan-img .cell::after { transition: none; }
+  .jangdan-img .cell.hit::after { transform: none; }
+}
+
+/* ---------- 가사: 소리에 맞춰 흐르는 글자 ---------- */
+.lyric-bar { text-align: center; margin: 6px 0 14px; }
+.lyric-bar .lyric-now { font-size: 30px; font-weight: 800; letter-spacing: 0.02em;
+  color: #B8B0A2; min-height: 42px; display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.lyric-bar.big .lyric-now { font-size: 40px; min-height: 54px; }
+/* 강조는 글자 하나씩 옮겨 가므로(반 소박 = 0.2초인 곳도 있다) 바뀜을 짧게 한다 */
+.lyric-bar .ly { transition: color .08s ease, transform .12s ease, text-shadow .12s ease;
+  display: inline-block; transform-origin: center bottom; }
+.lyric-bar .ly.on { color: var(--ink); transform: scale(1.18);
+  text-shadow: 0 2px 10px rgba(192,106,45,0.28); }
+.lyric-bar .ly-wait { color: #CFC7B8; font-size: 0.8em; }
+/* 한 토막(한 박에 묶인 글자)은 붙여 쓰고, 강조는 글자 하나씩 옮긴다 */
+.lyric-bar .ly-w { white-space: nowrap; }
+/* 강조된 글자가 1.18배로 커져도 옆 글자에 닿지 않게 토막 안 글자 사이를 조금 띄운다 */
+.lyric-bar .ly-w .ly { padding: 0 0.09em; }
+.lyric-bar .lyric-next { color: var(--muted); font-size: 15px; min-height: 22px; margin-top: 4px; }
+.lyric-bar .lyric-next:not(:empty)::before { content: "다음 ♪ "; opacity: .7; }
+@keyframes lyIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.lyric-bar .ly-in { animation: lyIn .28s ease-out; }
+
+/* ---------- 소리거울 ---------- */
+.mirror-wrap { margin: 4px 0 18px; }
+/* 은빛 유리 거울(2026-10-05 연구자 요청): 금속 테두리 → 안으로 들어간 유리 → 유리 위를 스치는 빛 두 줄기.
+   이름표(🪞 소리거울)는 테두리 위쪽에 걸쳐 단다 — 유리 안에 두면 오른쪽 위 가락선·가사를 가린다. */
+.mirror-frame { position: relative; border-radius: 26px; padding: 13px; margin-top: 16px;
+  background: linear-gradient(135deg, #F9FAFB 0%, #CDD2D9 16%, #F1F3F6 32%, #AEB4BE 50%,
+              #EDEFF2 66%, #BCC2CA 84%, #F6F7F9 100%);
+  border: 1px solid #A3AAB4;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.95) inset, 0 -1px 0 rgba(70,78,90,0.25) inset,
+              0 14px 32px rgba(40,48,60,0.20), 0 3px 8px rgba(40,48,60,0.12); }
+.mirror-frame::before {   /* 테두리 안쪽의 가는 빛 테 — 금속을 깎은 모서리 */
+  content: ""; position: absolute; inset: 6px; border-radius: 21px; pointer-events: none;
+  border: 1px solid rgba(255,255,255,0.75); box-shadow: 0 0 0 1px rgba(110,118,130,0.25); }
+.mirror-glass { position: relative; border-radius: 16px; overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(120,128,140,0.45), 0 2px 10px rgba(40,48,60,0.22) inset; }
+.mirror-glass::after {    /* 유리 위를 스치는 빛 두 줄기. 선을 가리지 않게 옅게 */
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, rgba(255,255,255,0) 6%, rgba(255,255,255,0.55) 11%,
+              rgba(255,255,255,0) 19%, rgba(255,255,255,0) 61%, rgba(255,255,255,0.34) 65%,
+              rgba(255,255,255,0) 70%); }
+.mirror-title { position: absolute; top: -15px; right: 28px; z-index: 3; pointer-events: none;
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px 4px 10px; border-radius: 999px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #E3E7EC 100%); border: 1px solid #A9B0BA;
+  box-shadow: 0 2px 5px rgba(40,48,60,0.18), 0 1px 0 #FFFFFF inset;
+  font-size: 14px; letter-spacing: 0.18em; font-weight: 700; color: #3F4855; }
+.mirror-emoji { font-size: 22px; letter-spacing: 0; line-height: 1; }
+.mirror-canvas { display: block; width: 100%; height: 340px;
+  /* 옆으로 끌어 되풀이 구간을 고른다. 세로로 밀면 화면은 그대로 내려간다(태블릿). */
+  cursor: col-resize; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+/* 박 기준 확대 단추 — 거울 바로 위 */
+.mirror-zoom { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 0 0 8px; }
+.mirror-zoom .zoom-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--card); }
+.mirror-zoom .zoom-seg button { border: 0; background: transparent; padding: 7px 16px; font-size: 15px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.mirror-zoom .zoom-seg button + button { border-left: 1px solid var(--line); }
+.mirror-zoom .zoom-seg button.on { background: var(--expert); color: #fff; }
+.mirror-zoom .zoom-nav { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; }
+.mirror-zoom .zoom-nav button { border: 1px solid var(--line); background: var(--card); border-radius: 999px; width: 38px; height: 34px; font-size: 14px; cursor: pointer; }
+.mirror-zoom .zoom-nav button:disabled { opacity: .35; cursor: default; }
+.mirror-zoom .zoom-nav b { min-width: 7.5em; text-align: center; font-size: 16px; color: var(--expert); font-variant-numeric: tabular-nums; }
+
+/* 고른 되풀이 구간 */
+.mirror-loop { display: inline-flex; align-items: center; gap: 8px; color: var(--expert); font-size: 15px; }
+.mirror-loop b { font-variant-numeric: tabular-nums; }
+.btn.small { padding: 6px 12px; font-size: 14px; }
+.mirror-bar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
+.mirror-bar .btn.primary { margin-left: 0; }
+.mirror-legend { display: flex; gap: 16px; font-size: 15px; }
+.mirror-legend .sw { display: inline-block; width: 22px; height: 4px; border-radius: 2px;
+  vertical-align: 3px; margin-right: 6px; }
+.mirror-legend .sw.expert { background: var(--expert); }
+.mirror-legend .sw.student { background: var(--student); }
+.mirror-mix { margin-left: auto; display: flex; gap: 12px; color: var(--muted); font-size: 14px; }
+.mirror-mix label { cursor: pointer; user-select: none; }
+/* 거울 쓰는 법 — 눈에 띄게(2026-10-05 연구자 요청). 할 일(끌기·누르기)에 밑줄 */
+.mirror-howto { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0 0; padding: 11px 16px;
+  background: #EDF1F6; border: 1px solid #C9D2DE; border-left: 5px solid var(--expert); border-radius: 12px;
+  color: var(--ink); font-size: 16px; line-height: 1.6; }
+.mirror-howto .mirror-emoji { font-size: 26px; line-height: 1.15; }
+.mirror-howto u { text-decoration-color: var(--student); text-decoration-thickness: 2px;
+  text-underline-offset: 4px; font-weight: 700; }
+.mirror-hint { color: var(--muted); font-size: 14px; line-height: 1.7; margin: 10px 0 0; }
+@media (max-width: 640px) {
+  .mirror-canvas { height: 260px; }
+  .mirror-frame { padding: 9px; border-radius: 20px; }
+  .mirror-frame::before { inset: 4px; border-radius: 17px; }
+  .mirror-title { right: 16px; font-size: 13px; }
+  .lyric-bar.big .lyric-now { font-size: 30px; }
+  .mirror-mix { margin-left: 0; flex-wrap: wrap; row-gap: 6px; }
+  .mirror-mix label { white-space: nowrap; }   /* 좁은 화면에서 글자가 한두 자씩 세로로 쌓이지 않게 */
+}
+
+/* 결과 화면의 '무엇이 다를까' 설명 */
+.compare { background: var(--card); border: 1px solid var(--line); border-left: 6px solid var(--expert);
+  border-radius: 12px; padding: 16px 22px; margin: 10px 0 14px; }
+.compare b { font-size: 18px; }
+.compare ul { margin: 10px 0 0; padding-left: 22px; }
+.compare li { line-height: 1.75; margin-bottom: 8px; }
+.compare details { margin-top: 12px; }
+.compare summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.compare .num { font-size: 14px; color: var(--muted); line-height: 1.8; margin-top: 8px; }
+.intro-text { background: var(--card); border-left: 6px solid var(--student); border-radius: 10px; padding: 16px 20px; line-height: 1.7; font-size: 18px; }
+.intro-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; align-items: center; }
+.btn { border-radius: 999px; padding: 12px 22px; border: 1px solid var(--line); background: var(--card); font-size: 17px; font-weight: 600; }
+.btn.primary { background: var(--expert); color: #fff; border-color: var(--expert); margin-left: auto; }
+.btn.primary:disabled { opacity: .5; cursor: default; }
+.btn.secondary.active { background: var(--student); color: #fff; border-color: var(--student); }
+.bg-anim { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: -1; }
+.bg-anim i { position: absolute; border-radius: 50%; opacity: .18; filter: blur(2px); animation: float 14s ease-in-out infinite; }
+.bg-anim i:nth-child(1) { width: 260px; height: 260px; background: var(--student); left: -80px; top: 120px; }
+.bg-anim i:nth-child(2) { width: 200px; height: 200px; background: var(--expert); right: -60px; top: 60px; animation-delay: -5s; }
+.bg-anim i:nth-child(3) { width: 160px; height: 160px; background: #C9B47A; right: 20%; bottom: 0; animation-delay: -9s; }
+@keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-28px) } }
+
+/* 주고받기 & 결과 */
+.pills { display: flex; gap: 12px; flex-wrap: wrap; margin: 6px 0 16px; }
+.pill { border-radius: 999px; padding: 8px 0; width: 120px; text-align: center; color: #fff; font-weight: 700; opacity: .35; transition: opacity .2s, transform .2s; }
+.pill.expert { background: var(--expert); } .pill.student { background: var(--student); }
+.pill.done { opacity: 1; } .pill.now { opacity: 1; transform: scale(1.08); box-shadow: 0 0 0 4px rgba(0,0,0,.08); }
+.status-box { background: var(--notice-bg); border-left: 8px solid var(--student); border-radius: 10px; padding: 18px 24px; font-size: 22px; font-weight: 700; color: #5A2E0E; margin-bottom: 16px; }
+.count-row { display: flex; align-items: center; gap: 24px; min-height: 84px; margin-bottom: 8px; }
+.count-big { font-size: 64px; font-weight: 900; color: var(--student); min-width: 90px; text-align: center; }
+.bak-dots { display: flex; gap: 12px; }
+.bak-dots i { width: 22px; height: 22px; border-radius: 50%; background: var(--line); display: block; }
+.bak-dots i.on { background: var(--ink); transform: scale(1.25); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; margin-bottom: 14px; }
+.card.muted { color: var(--muted); }
+.legend { display: flex; align-items: center; gap: 10px; font-weight: 700; margin-bottom: 6px; }
+.swatch { display: inline-block; width: 34px; height: 5px; border-radius: 3px; }
+.swatch.expert { background: var(--expert); } .swatch.student { background: var(--student); }
+.chart { display: block; width: 100%; height: 240px; }
+.placeholder { height: 120px; display: grid; place-items: center; color: #B7AF9F; }
+.legend-help { color: var(--muted); font-size: 14px; }
+
+/* ---- ③ 녹음 화면: 스크롤 없이 한 화면에 ----
+   아이가 부르는 동안 화면을 내릴 일이 없어야 한다. 요소를 전부 조금씩 줄이되
+   화면 높이에 따라 함께 줄도록 vh 로 묶었다(낮은 노트북에서도 한 판에 들어온다).
+   .card/.chart/.status-box 등은 결과 화면도 쓰므로 반드시 #screen-sing 안으로 한정한다. */
+#screen-sing {
+  padding-bottom:clamp(10px,1.8vh,20px); }
+#screen-sing .pills {
+  gap:clamp(6px,0.9vh,10px);
+  margin:2px 0 clamp(5px,1vh,10px); }
+#screen-sing .pill {
+  width:clamp(62px,5vw,78px);
+  padding:clamp(4px,0.6vh,6px) 0;
+  font-size:clamp(12.5px,1.7vh,14px); }
+#screen-sing .lyric-bar {
+  margin:0 0 clamp(4px,0.8vh,8px); }
+#screen-sing .lyric-bar .lyric-now {
+  font-size:clamp(18px,2.9vh,24px);
+  min-height:clamp(24px,3.8vh,32px);
+  gap:9px; }
+#screen-sing .lyric-bar .lyric-next {
+  font-size:clamp(12px,1.7vh,13.5px);
+  min-height:clamp(14px,2.2vh,18px);
+  margin-top:1px; }
+#screen-sing .jangdan-stack,
+#screen-sing .jangdan-img,
+#screen-sing .jeonggan {
+  max-width:clamp(320px,47vh,430px);
+  margin-top:clamp(2px,0.6vh,6px); }
+#screen-sing .jeonggan .sobak {
+  padding:clamp(3px,0.5vh,5px) 0 clamp(2px,0.4vh,4px); }
+#screen-sing .jeonggan .sym {
+  height:clamp(17px,2.7vh,23px); }
+#screen-sing .jeonggan .gu {
+  font-size:clamp(11px,1.6vh,13.5px);
+  min-height:clamp(13px,2vh,17px); }
+#screen-sing .status-box {
+  font-size:clamp(15px,2.2vh,19px);
+  padding:clamp(9px,1.4vh,13px) clamp(14px,1.4vw,20px);
+  margin:clamp(5px,1vh,10px) 0;
+  border-left-width:6px; }
+#screen-sing .count-row {
+  min-height:clamp(40px,6.3vh,56px);
+  gap:clamp(13px,1.4vw,20px);
+  margin-bottom:2px; }
+#screen-sing .count-big {
+  font-size:clamp(30px,5.1vh,44px);
+  min-width:clamp(46px,4vw,66px); }
+#screen-sing .bak-dots {
+  gap:clamp(7px,1vh,10px); }
+#screen-sing .bak-dots i {
+  width:clamp(12px,1.9vh,17px);
+  height:clamp(12px,1.9vh,17px); }
+#screen-sing .card {
+  padding:clamp(8px,1.2vh,12px) clamp(12px,1.1vw,16px);
+  margin-bottom:clamp(6px,1.1vh,10px);
+  border-radius:14px; }
+#screen-sing .legend {
+  font-size:clamp(13px,1.8vh,14.5px);
+  margin-bottom:1px; }
+#screen-sing .legend .swatch {
+  width:26px;
+  height:4px; }
+#screen-sing .chart {
+  height:clamp(100px,17.5vh,158px); }
+#screen-sing .placeholder {
+  height:clamp(50px,8.4vh,82px);
+  font-size:clamp(13px,1.8vh,14.5px); }
+
+.feedback { background: #fff; border: 2px solid var(--student); border-radius: 16px; padding: 18px 22px; font-size: 19px; line-height: 1.7; margin: 10px 0 18px; }
+.result-actions { display: flex; gap: 12px; }
+.alert { background: #FFF1EC; border: 2px solid #E39A7C; border-radius: 14px; padding: 16px 20px; font-size: 18px; }
+canvas.chart.clickable { cursor: pointer; }
+
+/* 녹음 중 학생 곡선을 감춰 두는 이유를 화면에 적어 둔다 (연구방법 확정 사항) */
+.placeholder-why {
+  margin: .4rem 0 0;
+  font-size: .82rem;
+  color: #7b7b7b;
+  text-align: center;
+}
+
+/* 거울 하단 '내 소리 음량' 슬라이더 — 아동의 마이크 녹음은 선생님 음원보다 훨씬 작다 */
+.mirror-mix label.vol { display: inline-flex; align-items: center; gap: .35rem; }
+.mirror-mix label.vol input[type="range"] { width: 6.5rem; accent-color: #C06A2D; }
+.mirror-mix label.vol b { font-variant-numeric: tabular-nums; color: #C06A2D; min-width: 3.6rem; }
+
+
+/* ---- 분석을 기다리는 동안 보여 주는 원 ----
+   분석이 13~25초 걸린다(곡 길이에 따라). 그동안 아무 변화가 없으면 아이는
+   멈춘 줄 안다. 그래서 원을 돌리고 지난 시간을 올려 준다 — 가짜 진행률 대신
+   실제로 흐른 시간을 보여 주는 쪽이 정직하고, 멈추지 않았다는 것도 전해진다.
+   곡선이 생길 바로 그 자리(내 소리 카드)에 두어 기다림과 결과가 이어지게 했다. */
+.analyzing { display: grid; place-items: center; gap: clamp(2px, 0.5vh, 6px); text-align: center;
+  padding: clamp(6px, 1.2vh, 14px) 0; }
+.analyzing .ring {
+  width: clamp(34px, 6vh, 56px); height: clamp(34px, 6vh, 56px);
+  border-radius: 50%;
+  border: clamp(4px, 0.7vh, 6px) solid var(--line);
+  border-top-color: var(--student);
+  animation: sg-spin 0.9s linear infinite; }
+@keyframes sg-spin { to { transform: rotate(360deg); } }
+.analyzing-title { font-weight: 800; color: #5A2E0E; font-size: clamp(14px, 2vh, 18px); }
+.analyzing-sub { color: var(--muted); font-size: clamp(12px, 1.7vh, 14.5px); }
+.analyzing-sub b { color: var(--student); font-variant-numeric: tabular-nums; }
+.analyzing-hint { color: #9A9384; font-size: clamp(10.5px, 1.4vh, 12.5px); }
+/* 움직임을 줄여 달라고 설정한 분께는 천천히 돈다 */
+@media (prefers-reduced-motion: reduce) { .analyzing .ring { animation-duration: 3.2s; } }
+
+/* ---- pesto-onnx: 분석 도구를 받는 동안의 표시 ----
+   곡을 여는 동안(곡 음원 받기) 누른 카드에 '불러오는 중'을 보인다. 느린 교실망에서는 수십 초가 걸린다. */
+.song-card.loading { cursor: progress; opacity: .72; }
+.song-card.loading::after { content: "불러오는 중…"; position: absolute; top: 10px; right: 14px;
+  font-size: 13px; font-weight: 700; color: var(--indigo); }
+/* 준비 화면 아래 한 줄: 받지 못했거나 이 기기로는 부를 수 없을 때는 눈에 띄게 */
+.note.warn { color: #9A3412; font-weight: 700; }
+#btn-retry-analyze { margin: 0 0 12px; }

@@ -1,0 +1,23 @@
+{
+ "model": "mir-1k_g7",
+ "bins_per_semitone": 3,
+ "output_bins": 384,
+ "shift_bins": 20,
+ "hcqt_params": {
+  "harmonics": [
+   1
+  ],
+  "fmin": 27.5,
+  "fmax": null,
+  "bins_per_semitone": 3,
+  "n_bins": 251,
+  "center_bins": true,
+  "gamma": 7,
+  "center": true
+ },
+ "opset": 17,
+ "exported_with": {
+  "pesto-pitch": "2.0.1",
+  "torch": "2.14.1"
+ }
+}

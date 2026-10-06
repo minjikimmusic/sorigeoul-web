@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>소리거울 · 지연 재기</title>
+  <style>
+    body { font-family: -apple-system, "Apple SD Gothic Neo", sans-serif; max-width: 640px; margin: 32px auto; padding: 0 16px; line-height: 1.6; color: #222; background: #fff; }
+    button { font-size: 18px; padding: 10px 20px; border-radius: 8px; border: 1px solid #888; background: #f4f4f4; cursor: pointer; }
+    button:disabled { opacity: .5; cursor: default; }
+    #big { font-size: 28px; font-weight: 700; margin: 16px 0 4px; }
+    table { border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+    td { border-bottom: 1px solid #ddd; padding: 3px 12px 3px 0; }
+    .warn { color: #b00; }
+  </style>
+</head>
+<body>
+  <h1>스피커 → 마이크 지연 재기</h1>
+  <p>앱은 녹음할 때마다 녹음에 새어 든 장단 소리로 기기 지연을 <b>자동으로</b> 잽니다.
+     이 페이지는 그 값이 맞는지 확인하는 정답지입니다 — 딸깍 소리로 따로 재서,
+     이 브라우저에서 앱이 마지막으로 잰 값과 나란히 보여 줍니다. 학생이 쓰는 화면이 아닙니다.</p>
+  <ol>
+    <li><b>이어폰을 빼고</b> 노래할 때와 같은 스피커·음량으로 둡니다.</li>
+    <li>버튼을 누르면 약 15초 동안 딸깍 소리가 16번 납니다. 그동안 <b>조용히</b> 해 주세요.</li>
+  </ol>
+  <button id="go">측정 시작</button>
+  <div id="status"></div>
+  <div id="big"></div>
+  <div id="detail"></div>
+
+  <script src="recorder.js"></script>
+  <script src="latency.js"></script>
+  <script>
+  const N = 16, GAP = 0.75, LEAD = 0.6;     // 앱과 같이 녹음 시작 0.6초 뒤부터 예약한다
+  const $ = id => document.getElementById(id);
+
+  function clickBuffer(ctx) {
+    // 30ms 짜리 2kHz 딸깍. 첫 주기부터 바로 커져서 녹음에서 시작점을 정확히 찾을 수 있다.
+    const sr = ctx.sampleRate, n = Math.round(0.03 * sr);
+    const b = ctx.createBuffer(1, n, sr), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = 0.8 * Math.sin(2 * Math.PI * 2000 * i / sr) * Math.exp(-i / sr / 0.006);
+    return b;
+  }
+
+  $("go").onclick = async () => {
+    $("go").disabled = true; $("big").textContent = ""; $("detail").textContent = "";
+    try {
+      // 앱(app.js)과 같은 마이크 설정·같은 녹음기를 쓴다. 그래야 잰 값이 노래할 때와 같다.
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === "suspended") await ctx.resume();
+      const rec = new MicRecorder(ctx, stream);
+      $("status").textContent = "마이크 준비 중…";
+      await rec.start();
+      const base = ctx.currentTime + LEAD;
+      const click = clickBuffer(ctx);
+      const times = [];
+      for (let k = 0; k < N; k++) {
+        const s = ctx.createBufferSource(); s.buffer = click; s.connect(ctx.destination);
+        const t = base + k * GAP; s.start(t); times.push(t);
+      }
+      $("status").textContent = "딸깍 소리를 내며 녹음하고 있어요. 조용히 해 주세요…";
+      await new Promise(r => setTimeout(r, (LEAD + N * GAP + 0.8) * 1000));
+      const take = await rec.stop();
+      stream.getTracks().forEach(t => t.stop());
+
+      // 앱과 똑같이: 녹음 0초 = take.startTime, 출력 지연 = take.outputLatency (mic_latency_ms 는 0으로 두고 잰다)
+      const expected = times.map(t => t - take.startTime + take.outputLatency);
+      let appLast = null;   // 앱(app.js)이 녹음마다 자동으로 잰 마지막 값 — 같은 주소라 같은 저장소를 본다
+      try { appLast = JSON.parse(localStorage.getItem("sorigeoul.deviceLatency") || "null"); } catch (e) { /* 없음 */ }
+      const res = clickOffsets(take.pcm, take.sampleRate, expected);
+      const s = summarize(res);
+      const report = {
+        clicks: N, detected: s.n,
+        mic_latency_ms_suggested: s.n ? Math.round(s.median) : null,
+        // 앱의 자동 측정과 같은 기준(출력 지연까지 합친 왕복)
+        device_latency_ms: s.n ? +(take.outputLatency * 1000 + s.median).toFixed(1) : null,
+        app_last_auto_ms: appLast ? +(appLast.latency_s * 1000).toFixed(1) : null,
+        median_ms: s.median, q1_ms: s.q1, q3_ms: s.q3, min_ms: s.min, max_ms: s.max,
+        output_latency_s: take.outputLatency, base_latency_s: ctx.baseLatency || 0,
+        start_time_drift_s: take.startTimeDrift, sample_rate: take.sampleRate,
+        recording_seconds: take.seconds, residuals_ms: res.map(x => x === null ? null : +x.toFixed(1)),
+        user_agent: navigator.userAgent,
+      };
+      // 서버 로그에도 남긴다(녹음은 보내지 않는다 — 수치만).
+      fetch("api/latency-report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) }).catch(() => {});
+
+      if (s.n < N / 2) {
+        $("big").innerHTML = `<span class="warn">딸깍 소리를 ${s.n}/${N}번밖에 못 들었어요.</span>`;
+        $("status").textContent = "이어폰을 빼고 스피커 음량을 올린 뒤 다시 재 주세요.";
+      } else {
+        $("big").textContent = `기기 지연 ≈ ${(take.outputLatency * 1000 + s.median).toFixed(0)} ms`;
+        $("status").textContent = `딸깍 ${s.n}/${N}번을 잡았어요. 흔들림(사분위) ${s.q1.toFixed(0)}~${s.q3.toFixed(0)}ms.`;
+      }
+      $("detail").innerHTML = "<table>" + [
+        ["앱이 이 브라우저에서 마지막으로 자동으로 잰 기기 지연",
+         appLast ? `${(appLast.latency_s * 1000).toFixed(1)} ms (${appLast.at || ""})` : "아직 없음 — 앱에서 한 번 불러 보세요"],
+        ["딸깍으로 잰 값 − 출력 지연 (자동으로 못 잴 때 쓰는 config의 mic_latency_ms)", s.n ? `${Math.round(s.median)} ms` : "—"],
+        ["브라우저가 알려 준 출력 지연(outputLatency)", `${(take.outputLatency * 1000).toFixed(1)} ms`],
+        ["baseLatency", `${((ctx.baseLatency || 0) * 1000).toFixed(1)} ms`],
+        ["녹음 0초 역산 − 워크렛 보고(startTimeDrift)", `${(take.startTimeDrift * 1000).toFixed(1)} ms`],
+        ["표본율", `${take.sampleRate} Hz`],
+        ["딸깍마다(ms)", res.map(x => x === null ? "—" : x.toFixed(0)).join(" ")],
+      ].map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("") + "</table>";
+      ctx.close();
+    } catch (e) {
+      $("status").innerHTML = `<span class="warn">측정하지 못했어요: ${e.message}</span>`;
+      console.error(e);
+    }
+    $("go").disabled = false;
+  };
+  </script>
+</body>
+</html>
