@@ -567,3 +567,12 @@ canvas.chart.clickable { cursor: pointer; }
 /* 준비 화면 아래 한 줄: 받지 못했거나 이 기기로는 부를 수 없을 때는 눈에 띄게 */
 .note.warn { color: #9A3412; font-weight: 700; }
 #btn-retry-analyze { margin: 0 0 12px; }
+
+/* ---------- 휴대폰·태블릿에서만: 'PC 환경에서 가장 잘 돼요' (2026-10-07 연구자 요청) ----------
+   손가락이 주 입력이고 마우스 올리기(hover)를 못 하는 기기에서만 페이지 맨 아래에 보인다.
+   터치스크린 노트북은 마우스·트랙패드가 주 입력이라 보이지 않는다. 아이폰 아래쪽 홈 막대에 가리지 않게 여백을 둔다. */
+.pc-note { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .pc-note { display: block; text-align: center; color: var(--muted); font-size: 13px;
+    margin: 24px 16px 0; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+}
