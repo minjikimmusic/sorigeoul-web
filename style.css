@@ -574,5 +574,6 @@ canvas.chart.clickable { cursor: pointer; }
 .pc-note { display: none; }
 @media (hover: none) and (pointer: coarse) {
   .pc-note { display: block; text-align: center; color: var(--muted); font-size: 13px;
-    margin: 24px 16px 0; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+    margin: 24px 16px 0; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    word-break: keep-all; text-wrap: balance; }   /* 낱말 중간('최적화되/어')에서 끊지 않고, 두 줄 길이를 고르게 */
 }
