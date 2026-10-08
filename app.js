@@ -363,8 +363,10 @@ async function loadIntro(songId) {
   notes.push(state.jangdanBuf
     ? `‘장단 듣기’와 반주는 녹음한 ${state.jd.name} 음원입니다(1박 ♩. = ${state.jd.bpm_bak}).`
     : `${state.jd.name} 녹음 음원이 아직 없어 합성 장구 소리로 들려줍니다(1박 ♩. = ${state.jd.bpm_bak}, 임시 템포).`);
+  // 2026-10-07: 금다래꿍은 새 선생님 녹음 6장단 가운데 앞 4장단만 듣기 음원으로 쓴다(뒤는 잘라 냄). 그래서 '원본 전체를
+  // 자르지 않고'라고 하지 않고, 네 곡 모두에 맞는 '빠르기를 바꾸지 않고'라고 적는다.
   if (state.expertFullBuf) notes.push(
-    `‘선생님 노래 듣기’는 전문가 녹음 원본 전체(${state.expertFullBuf.duration.toFixed(1)}초)를 자르지 않고 그대로 들려줍니다.`);
+    `‘선생님 노래 듣기’는 전문가 녹음(${state.expertFullBuf.duration.toFixed(1)}초)을 빠르기를 바꾸지 않고 그대로 들려줍니다.`);
   else if (!state.expertBuf) notes.push(`선생님 노래 음원(client/${state.song.expert_audio})이 아직 없어 지금은 장단만 들을 수 있어요.`);
   if (state.studentData) notes.push(`이 곡은 선생님과 학습자의 실제 녹음을 미리 분석해 둔 자료도 있습니다. ` +
     "‘예시 비교 보기’를 누르면 마이크를 쓰지 않고 그 두 가락선을 나란히 보여 줍니다.");

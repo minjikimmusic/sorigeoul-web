@@ -101,7 +101,8 @@ function lyricTopPad(size) { return Math.round(size * 1.25) + 6; }
 /**
  * 그래프 시간축 위의 글자 목록. t = 0 은 비교 구간의 첫 정박(곡 전체에서 base 번째 소박)이다.
  * 각 글자는 다음 글자 직전까지 이어진다고 본다(tEnd) — '지금 부르는 글자'를 고를 때 쓴다.
- * chunk = 그 글자가 속한 토막(한 박)의 소박. 비교 구간 밖의 글자는 뺀다.
+ * chunk = 그 글자가 속한 토막(한 박)의 소박, chunkEnd = 그 토막이 끝나는 시각(다음 토막 첫 글자).
+ * 비교 구간 밖의 글자는 뺀다.
  */
 function lyricGlyphs(song, base, sobakS, total) {
   const ch = lyricChars(song);
@@ -110,7 +111,10 @@ function lyricGlyphs(song, base, sobakS, total) {
     const t = (ch[i].sobak - base) * sobakS;
     if (t < -1e-6 || t >= total - 1e-6) continue;
     const tEnd = i + 1 < ch.length ? Math.min(total, (ch[i + 1].sobak - base) * sobakS) : total;
-    out.push({ t: Math.max(0, t), tEnd, text: ch[i].text, sobak: ch[i].sobak, chunk: ch[i].chunk });
+    let k = i + 1;
+    while (k < ch.length && ch[k].chunk === ch[i].chunk) k++;
+    const chunkEnd = k < ch.length ? Math.min(total, (ch[k].sobak - base) * sobakS) : total;
+    out.push({ t: Math.max(0, t), tEnd, chunkEnd, text: ch[i].text, sobak: ch[i].sobak, chunk: ch[i].chunk });
   }
   return out;
 }
@@ -223,10 +227,14 @@ function layoutLyricGlyphs(glyphs, o) {
     let x = Math.max(cont ? o.xMin + 1 : x0 + (head ? 3 : 1), prevRight + 2);
     const se = steepEnd(o.T(x));
     if (se !== null && se > x && se - x < w) x = se;
-    // 아주 좁은 화면: 앞 글자에 밀려 제 소리 구간 밖으로 나가는 글자는 빼고, 뒤 글자는 더 밀지 않는다.
+    // 아주 좁은 화면: 앞 글자에 밀려 제 박(토막) 밖으로 나가는 글자는 빼고, 뒤 글자는 더 밀지 않는다.
     // (그대로 두면 밀림이 쌓여 줄 끝 글자 — 금다래꿍의 떠는 자리 '네' 같은 — 가 통째로 빠진다)
     // (장단 첫 글자가 굵은 장단선을 비켜 원래 띄우는 3px 는 '밀림'으로 치지 않는다 — 반 소박짜리 '쾌'가 빠졌다)
-    if (!cont && x > x0 + (head ? 3 : 1) + 0.01 && x >= o.X(g.tEnd) - 1) continue;
+    // 기준은 그 글자의 소리 구간(다음 글자까지)이 아니라 글자가 묶인 박의 끝이다. 반 소박 간격('쾌지나'의 '지',
+    // '금다래'의 '래')은 컴퓨터 화면에서도 글자 폭보다 좁아 박 안에서 밀리는 것이 당연한데, 소리 구간을 기준으로
+    // 하면 그 글자가 늘 빠졌다(2026-10-07 연구자 지적: 세 번 모두 '쾌나 칭칭나네'로 나옴).
+    const limit = g.chunkEnd === undefined ? g.tEnd : g.chunkEnd;
+    if (!cont && x > x0 + (head ? 3 : 1) + 0.01 && x >= o.X(limit) - 1) continue;
     if (x + w > o.xMax) {
       if (!cont && x0 + 1 + w > o.xMax) continue;                 // 제 자리에서 안 들어가면 빼고
       x = Math.max(o.xMin, o.xMax - w);                           // 앞 글자에 밀린 것이면 당긴다

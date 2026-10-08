@@ -1,4 +1,6 @@
+import math
 import config
+from server import compare
 
 def _sig(segs, note=None):
     out = [s for s in segs if s.get('type') == 'sigimsae']
@@ -130,6 +132,90 @@ def _each_spot(song, segs, exp_segs):
     if extras:
         why['덧붙인 자리 판정'] = extra_keys
     return (' '.join(parts + [F['mirror']]), why)
+
+def _fill_short_gaps(on, max_gap):
+    out, i, n = (list(on), 0, len(on))
+    while i < n:
+        if on[i]:
+            i += 1
+            continue
+        j = i
+        while j < n and (not on[j]):
+            j += 1
+        if i > 0 and j < n and (j - i <= max_gap):
+            out[i:j] = [True] * (j - i)
+        i = j
+    return out
+
+def _longest(flags):
+    best = cur = 0
+    for f in flags:
+        cur = cur + 1 if f else 0
+        best = max(best, cur)
+    return best
+
+def breath_breaks(song_id, expert, student):
+    song = config.SONGS[song_id]
+    R = song.get('breath_feedback')
+    if not R:
+        return ('', None)
+    if not expert or expert.get('dummy') or (not expert.get('curve')) or (not (student or {}).get('curve')):
+        return ('', {'판정': '선생님 실제 곡선이 없어(더미) 숨 끊김을 보지 않음'})
+    tm = expert['timing']
+    hop = config.ANALYSIS['hop_ms'] / 1000.0
+    sob, spb, spj = (tm['sobak_seconds'], tm['sobak_per_bak'], tm['sobak_per_jangdan'])
+    e = [c['cents'] is not None for c in expert['curve']]
+    n = min(len(e), len(student['curve']))
+    sung, own = compare.own_voice(student, n)
+    if sung is None:
+        return ('', {'판정': '학습자 소리를 반주와 가려낼 수 없어 숨 끊김을 보지 않음', '학습자 소리': own})
+    teacher = _fill_short_gaps(e[:n], int(R['teacher_gap_max_s'] / hop + 1e-06))
+    gap_min = int(math.ceil(R['student_gap_min_s'] / hop - 1e-06))
+    resume = int(math.ceil(R['resume_min_s'] / hop - 1e-06))
+    turns = bool(student.get('live'))
+    db = student.get('voice_db')
+
+    def level(idx):
+        v = sorted((db[i] for i in idx if i < len(db) and db[i] is not None)) if db else []
+        return round(v[len(v) // 2], 1) if v else None
+    found, dropped = ([], [])
+    for a, b in compare._runs([teacher[i] and (not sung[i]) for i in range(n)], gap_min):
+        pos = a * hop / sob + 1e-06
+        item = {'자리': compare.place_label(song, tm, int(pos)), '시작 초': round(a * hop, 2), '길이 초': round((b - a) * hop, 2)}
+        if db:
+            item['빈 곳 세기(dB)'] = level(range(a, b))
+        line = next((ln for ln in song.get('lyric_lines') or [] if ln[0] <= pos < ln[1]), None)
+        why = []
+        if line is None:
+            why.append('가사 줄 밖')
+        else:
+            lo, hi = (line[0], line[1])
+            if turns:
+                j = int(pos // spj)
+                lo, hi = (max(lo, j * spj), min(hi, (j + 1) * spj))
+            if pos >= line[1] - spb:
+                why.append('줄 마지막 박')
+            la, lb = (int(round(lo * sob / hop)), min(n, int(round(hi * sob / hop))))
+            if _longest(sung[la:a]) < resume:
+                why.append('앞에 학습자 소리가 없음')
+            if _longest(sung[b:lb]) < resume:
+                why.append('뒤에 다시 이어 부르지 않음')
+            t_on = [i for i in range(la, lb) if teacher[i]]
+            if t_on and sum((1 for i in t_on if sung[i])) < R['min_sung_ratio'] * len(t_on):
+                why.append('그 부분을 거의 부르지 않음')
+        if why:
+            dropped.append(dict(item, 까닭=why))
+        else:
+            found.append(item)
+    places = []
+    for f in found:
+        if f['자리'] not in places:
+            places.append(f['자리'])
+    places = places[:R['max_places']]
+    basis = {'기준': f"선생님이 소리 내는 동안(선생님 쪽 {R['teacher_gap_max_s']:g}초 이하의 틈은 이어진 것으로 봄) 학습자만 {R['student_gap_min_s']:g}초 이상 빈 곳. 같은 단위 안에서 그 앞과 뒤에 학습자 소리가 {R['resume_min_s']:g}초 이상 이어진 곳이 있어야 하고, 그 단위에서 선생님 소리 칸의 {R['min_sung_ratio']:g}배 이상 학습자 소리가 있어야 한다. 줄 마지막 박에서 시작한 것은 뺀다. 문장에는 시간 순으로 {R['max_places']}곳까지", '단위': '가사 줄 가운데 그 장단(직접 부른 소리 — 장단마다 따로 부른다)' if turns else '가사 줄', '학습자 소리': own, '찾은 곳': found, '뺀 곳': dropped}
+    if db:
+        basis['학습자 노래 세기(dB)'] = level([i for i in range(n) if sung[i]])
+    return (R['sentence'].format(자리=', '.join(places)) if places else '', basis)
 
 def select(song_id, student_segments, expert_segments=None, diag=None):
     song = config.SONGS[song_id]

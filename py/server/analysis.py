@@ -74,6 +74,27 @@ class Prep:
     latency_auto: object
     segments: list
     t_start: float
+    ready_segments: list = dataclasses.field(default_factory=list)
+
+def _ready_lag():
+    seq = config.TURN_TAKING['sequence_per_pair']
+    if 'ready' not in seq or 'student' not in seq:
+        return None
+    lag = seq.index('student') - seq.index('ready')
+    return lag if lag > 0 else None
+
+def _cut_inside(samples, sr, start_s, length_s):
+    if start_s < 0:
+        return None
+    seg, pad_before, cut_tail = wav.cut(samples, sr, start_s, length_s, PAD_S)
+    return None if cut_tail else {'samples': seg, 'pad_before': pad_before}
+TURN_GAP_TOL_S = 0.05
+
+def _ready_segments(samples, sr, starts, offset, J, lag):
+    gap = len(config.TURN_TAKING['sequence_per_pair']) * J
+    if any((abs(b - a - gap) > TURN_GAP_TOL_S for a, b in zip(starts, starts[1:]))):
+        return []
+    return [_cut_inside(samples, sr, s - lag * J + offset, J) for s in starts]
 
 def prepare(wav_bytes, song_id, timing_info):
     t_start = time.perf_counter()
@@ -91,7 +112,10 @@ def prepare(wav_bytes, song_id, timing_info):
     for start_s in starts:
         seg, pad_before, cut_tail = wav.cut(samples, sr, start_s + offset, tm['jangdan_seconds'], PAD_S)
         segments.append({'samples': seg, 'pad_before': pad_before, 'cut_tail': cut_tail, 'peak': round(float(np.abs(seg).max()) if len(seg) else 0.0, 4)})
-    return Prep(song_id=song_id, sr=int(sr), tm=tm, samples_len=len(samples), input_peak=round(float(np.abs(samples).max()), 4), starts=starts, out_lat=out_lat, offset=offset, latency_method=method, latency_auto=_latency_auto(timing_info), segments=segments, t_start=t_start)
+    ready, lag = ([], _ready_lag())
+    if config.measures_voice(song_id) and lag:
+        ready = _ready_segments(samples, sr, starts, offset, tm['jangdan_seconds'], lag)
+    return Prep(song_id=song_id, sr=int(sr), tm=tm, samples_len=len(samples), input_peak=round(float(np.abs(samples).max()), 4), starts=starts, out_lat=out_lat, offset=offset, latency_method=method, latency_auto=_latency_auto(timing_info), segments=segments, t_start=t_start, ready_segments=ready)
 
 def finish(prep, predictions, expert=None, engine=None):
     if len(predictions) != len(prep.segments):
@@ -102,10 +126,16 @@ def finish(prep, predictions, expert=None, engine=None):
     tm = prep.tm
     per_jangdan = int(round(tm['jangdan_seconds'] / hop_s))
     f0_all, conf_all = ([], [])
+    voice = [] if config.measures_voice(prep.song_id) else None
+    clipped = []
     truncated = any((s['cut_tail'] for s in prep.segments))
-    for s, (f, c) in zip(prep.segments, predictions):
+    for j, (s, (f, c)) in enumerate(zip(prep.segments, predictions)):
         skip = int(round(s['pad_before'] / hop_s))
         f, c = (f[skip:skip + per_jangdan], c[skip:skip + per_jangdan])
+        if voice is not None:
+            lv = pitch.voice_level(s['samples'], prep.sr, A)[skip:skip + per_jangdan]
+            voice.append(np.concatenate([lv, np.full(per_jangdan - len(lv), np.nan)]))
+            clipped += [j * per_jangdan + k - skip for k in pitch.clipped_frames(s['samples'], prep.sr, A) if 0 <= k - skip < min(len(lv), per_jangdan)]
         if len(f) < per_jangdan:
             k = per_jangdan - len(f)
             f = np.concatenate([f, np.zeros(k)])
@@ -128,7 +158,29 @@ def finish(prep, predictions, expert=None, engine=None):
     eng.update(engine or {})
     if eng['f0_device'] is None:
         eng['f0_device'] = f0_engine.device(A)
-    return {'song_id': prep.song_id, 'role': 'student', 'dummy': False, 'live': True, 'bonchung_hz': song['bonchung_hz'], 'timing': tm, 'curve': curve, 'segments': segs, 'segments_alt': segs_alt, 'source': {'input': 'microphone', 'f0_model': A['f0_model'], **eng, 'sample_rate': prep.sr, 'recording_seconds': round(prep.samples_len / prep.sr, 3), 'input_peak': prep.input_peak, 'student_window_peaks': [s['peak'] for s in prep.segments], 'student_window_starts_s': [round(s, 3) for s in prep.starts], 'latency_offset_s': round(prep.offset, 4), 'latency_method': prep.latency_method, 'latency_auto': prep.latency_auto, 'output_latency_s': round(prep.out_lat, 4), 'mic_latency_ms': A['mic_latency_ms'], 'confidence_threshold': A['confidence_threshold'], 'window_ms': A['window_ms'], 'thresholds': {k: A[k] for k in ('stable_std_cents_max', 'moving_slope_cents_per_s', 'sigimsae_peak_ratio_min')}, 'octave_fixed_frames': int(fixed), 'outlier_frames_dropped': int(odd), 'valid_ratio': round(float(ok.mean()), 3), 'octave_shift': oct_k, 'octave_anchor_cents': _anchor_cents(expert, song), 'median_cents_before_fold': med_cents, 'recording_truncated': truncated, 'sigimsae_diagnostics': diag, 'sigimsae_diagnostics_alt': diag2, 'analysis_seconds': round(time.perf_counter() - prep.t_start, 3)}}
+    out = {'song_id': prep.song_id, 'role': 'student', 'dummy': False, 'live': True, 'bonchung_hz': song['bonchung_hz'], 'timing': tm, 'curve': curve, 'segments': segs, 'segments_alt': segs_alt, 'source': {'input': 'microphone', 'f0_model': A['f0_model'], **eng, 'sample_rate': prep.sr, 'recording_seconds': round(prep.samples_len / prep.sr, 3), 'input_peak': prep.input_peak, 'student_window_peaks': [s['peak'] for s in prep.segments], 'student_window_starts_s': [round(s, 3) for s in prep.starts], 'latency_offset_s': round(prep.offset, 4), 'latency_method': prep.latency_method, 'latency_auto': prep.latency_auto, 'output_latency_s': round(prep.out_lat, 4), 'mic_latency_ms': A['mic_latency_ms'], 'confidence_threshold': A['confidence_threshold'], 'window_ms': A['window_ms'], 'thresholds': {k: A[k] for k in ('stable_std_cents_max', 'moving_slope_cents_per_s', 'sigimsae_peak_ratio_min')}, 'octave_fixed_frames': int(fixed), 'outlier_frames_dropped': int(odd), 'valid_ratio': round(float(ok.mean()), 3), 'octave_shift': oct_k, 'octave_anchor_cents': _anchor_cents(expert, song), 'median_cents_before_fold': med_cents, 'recording_truncated': truncated, 'sigimsae_diagnostics': diag, 'sigimsae_diagnostics_alt': diag2, 'analysis_seconds': round(time.perf_counter() - prep.t_start, 3)}}
+    if voice is not None:
+        out['voice_db'] = pitch.level_list(np.concatenate(voice))
+        out['voice_clipped'] = sorted(clipped)
+        out['source']['voice_level'] = {'band_hz': list(A['voice_band_hz']), 'window_ms': A['voice_level_window_ms']}
+        backing = _backing_db(prep, per_jangdan, hop_s, A)
+        if backing is not None:
+            out['backing_db'], n_ready = backing
+            out['source']['voice_level']['backing_ready_jangdan'] = n_ready
+    return out
+
+def _backing_db(prep, per_jangdan, hop_s, A):
+    rows = []
+    for s in prep.ready_segments:
+        if s is None:
+            continue
+        skip = int(round(s['pad_before'] / hop_s))
+        lv = pitch.voice_level(s['samples'], prep.sr, A)[skip:skip + per_jangdan]
+        if len(lv) == per_jangdan:
+            rows.append(lv)
+    if not rows:
+        return None
+    return (pitch.level_list(np.median(np.array(rows), axis=0)), len(rows))
 
 def analyze_wav(wav_bytes, song_id, timing_info, expert=None):
     prep = prepare(wav_bytes, song_id, timing_info)

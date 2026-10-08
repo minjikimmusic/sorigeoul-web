@@ -193,6 +193,44 @@ def merge(lab, rate, ext, slope, cent, valid, hop_s, sobak_s, notes, tori, min_m
 
 def build_curve(times, cent, valid):
     return [{'t': round(float(times[i]), 3), 'cents': round(float(cent[i]), 1) if valid[i] else None} for i in range(len(times))]
+VOICE_FLOOR_DB = -120.0
+
+def voice_level(samples, sr, A, chunk=256):
+    x = np.asarray(samples, dtype=np.float64)
+    sr = int(sr)
+    hop = int(A['hop_ms'] * sr / 1000 + 0.5)
+    n = 1 + len(x) // hop
+    L = max(16, int(round(A['voice_level_window_ms'] * sr / 1000.0)))
+    win = np.hanning(L)
+    freqs = np.fft.rfftfreq(L, 1.0 / sr)
+    lo, hi = A['voice_band_hz']
+    band = (freqs >= lo) & (freqs <= hi)
+    scale = 2.0 / (L * float(np.sum(win ** 2)))
+    padded = np.concatenate([np.zeros(L // 2), x, np.zeros(L)])
+    offsets = np.arange(L)
+    out = np.empty(n)
+    for a in range(0, n, chunk):
+        k = np.arange(a, min(n, a + chunk))
+        frames = padded[(k * hop)[:, None] + offsets[None, :]] * win
+        power = (np.abs(np.fft.rfft(frames, axis=1)[:, band]) ** 2).sum(axis=1) * scale
+        out[a:a + len(k)] = np.where(power > 0, 10.0 * np.log10(np.maximum(power, 1e-300)), VOICE_FLOOR_DB)
+    return np.maximum(out, VOICE_FLOOR_DB)
+
+def level_list(levels):
+    return [round(float(v), 1) if np.isfinite(v) else None for v in levels]
+
+def clipped_frames(samples, sr, A):
+    hit = np.abs(np.asarray(samples, dtype=np.float64)) >= A['clip_level']
+    sr = int(sr)
+    hop = int(A['hop_ms'] * sr / 1000 + 0.5)
+    n = 1 + len(hit) // hop
+    L = max(16, int(round(A['voice_level_window_ms'] * sr / 1000.0)))
+    if not hit.any():
+        return []
+    c = np.concatenate([[0], np.cumsum(hit)])
+    a = np.arange(n) * hop - L // 2
+    cnt = c[np.clip(a + L, 0, len(hit))] - c[np.clip(a, 0, len(hit))]
+    return [int(k) for k in np.nonzero(cnt > A['clip_ratio'] * L)[0]]
 
 def timing_block(jd, n_jangdan):
     sobak_s = 60.0 / jd['bpm_bak'] / jd['sobak_per_bak']

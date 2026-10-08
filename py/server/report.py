@@ -14,6 +14,11 @@ def load_reference(role, song_id):
 def with_feedback(result, song_id, expert):
     expert = expert if expert else dummy.expert_result(song_id)
     result['feedback'], result['feedback_basis'] = feedback.select(song_id, result.get('segments'), expert.get('segments'), result.get('source', {}).get('sigimsae_diagnostics'))
+    breath, why = feedback.breath_breaks(song_id, expert, result)
+    if why is not None:
+        result['feedback_basis']['숨 끊김'] = why
+    if breath:
+        result['feedback'] = f"{result['feedback']} {breath}" if result['feedback'] else breath
     result['comparison'] = compare.compare(song_id, expert, result)
     result['expert_dummy'] = bool(expert.get('dummy'))
     return result

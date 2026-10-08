@@ -3,10 +3,13 @@
 프로그램이 실제로 쓰는 파일 (네 곡 모두 이미 들어 있습니다)
   {song}_expert.wav        : 주고받기·비교용으로 잘라낸 선생님(전문가) 가창
   {song}_student_demo.wav  : 같은 구간의 학습자 가창 ('예시 비교 보기'용)
-  {song}_expert_full.wav   : 자르지 않은 선생님 가창 전체 ('선생님 노래 듣기'용)
+  {song}_expert_full.wav   : 빠르기를 바꾸지 않은 선생님 가창 전체 ('선생님 노래 듣기'용.
+                             금다래꿍은 2026-10-07 새 녹음 6장단 가운데 쓰는 4장단까지)
   jangdan_{장단}.wav        : '장단 듣기'·반주용 장단 음원
-                             지금 semachi, jungjungmori 가 있고 gutgeori 는 없습니다
+                             지금 semachi, jungjungmori, gutgeori 가 있습니다
                              (없는 장단은 합성 장구 소리로 대신합니다)
+  jangdan_{장단}_{빠르기}.wav : 곡 전용 장단 음원(2026-10-07) — 아리랑 세마치 ♩.=90, 금다래꿍 중중모리 ♩.=40.
+                             config 곡 설정의 jangdan_audio 가 가리킨다
   song = arirang | jindo | kwaejina | geumdaraekkung
 
 넣으면 버튼이 자동으로 나타나는 파일 (지금은 없음)
@@ -20,6 +23,8 @@
 
 장단 음원(jangdan_{장단}.wav)은 아래로 만들 것.
     uv run python tools/build_jangdan_loop.py --jangdan jungjungmori --wav ~/....wav
+곡 전용 장단 음원(빠르기만 다른 것)은 위 음원의 '타점 다시 놓기'로 만든다.
+    uv run python tools/retime_jangdan.py --jangdan semachi --bpm 90 --out client/audio/jangdan_semachi_90.wav
 
 mp3 로 만들지 말 것 — 인코더가 앞뒤에 수십 ms 패딩을 붙여 장단 격자가 밀립니다.
 원본(source/)은 건드리지 않는다.

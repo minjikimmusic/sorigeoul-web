@@ -1,3 +1,4 @@
+import math
 import config
 
 def _cents(curve):
@@ -37,6 +38,125 @@ def _lyric_at(song, k):
             return e['text']
     return None
 
+def place_label(song, tm, k):
+    pos = f"{k // tm['sobak_per_jangdan'] + 1}장단 {k % tm['sobak_per_jangdan'] // tm['sobak_per_bak'] + 1}박"
+    w = _lyric_at(song, k)
+    return f'‘{w}’({pos})' if w else pos
+
+def _eul(word):
+    c = ord(word[-1])
+    return '을' if 44032 <= c <= 55203 and (c - 44032) % 28 else '를'
+
+def _first_frame(t, hop):
+    return int(math.ceil(t / hop - 1e-06))
+
+def own_voice(result, n):
+    A = config.ANALYSIS
+    on = [c['cents'] is not None for c in result['curve'][:n]]
+    db, bk = (result.get('voice_db'), result.get('backing_db'))
+    if not db or not bk:
+        return (on, {'고른 법': '음높이가 잡힌 칸(반주 세기 없음 — 미리 녹음한 자료)'})
+    per = len(bk)
+
+    def over(i):
+        b = bk[i % per] if i < len(db) else None
+        return None if b is None or db[i] is None else db[i] - b
+    ex = sorted((x for x in (over(i) for i in range(n) if on[i]) if x is not None))
+    mid = ex[len(ex) // 2] if ex else None
+    margin = A['own_voice_margin_db']
+    why = {'고른 법': f'음높이가 잡힌 칸이 이어진 조각 가운데 같은 자리 반주(준비 장단)보다 평균 {margin:g}dB 이상 큰 조각', '반주보다 큰 정도 가운데 값(dB)': None if mid is None else round(mid, 1)}
+    if mid is None or mid < margin:
+        why['판정'] = f'학습자 소리를 반주와 가려낼 수 없음 — 음높이가 잡힌 칸 절반 넘게가 반주보다 {margin:g}dB 넘게 크지 않다(거의 부르지 않았거나 스피커 소리가 목소리만큼 크다)'
+        return (None, why)
+    out, left = ([False] * n, 0)
+    for a0, b0 in _runs(on, 1):
+        for a, b in _split_at(a0, b0, per):
+            v = [x for x in (over(i) for i in range(a, b)) if x is not None]
+            if v and sum(v) / len(v) >= margin:
+                out[a:b] = [True] * (b - a)
+            else:
+                left += b - a
+    why['뺀 유성 칸'] = left
+    return (out, why)
+
+def _split_at(a, b, per):
+    out = []
+    while a < b:
+        z = min(b, (a // per + 1) * per)
+        out.append((a, z))
+        a = z
+    return out
+
+def _jangdan_accents(data, ok, tm, R, n, hop, shifts=None, turns=False):
+    db = data['voice_db']
+    clipped = set(data.get('voice_clipped') or ())
+    w0, w1 = R['window_s']
+    per = int(round(tm['jangdan_seconds'] / hop))
+    vals, why = ([], [])
+    for j in range(tm['n_jangdan']):
+        lo, hi = (j * per, (j + 1) * per) if turns else (0, n)
+        lo, hi = (max(0, lo), min(n, hi))
+        windows = []
+        for k in shifts[j] if shifts else (0,):
+            row = []
+            for b in range(tm['bak']):
+                head = (j * tm['sobak_per_jangdan'] + b * tm['sobak_per_bak']) * tm['sobak_seconds'] + k * hop
+                row.append((max(lo, _first_frame(head + w0, hop)), min(hi, _first_frame(head + w1, hop))))
+            windows.append(row)
+        if any((i in clipped for row in windows for a, z in row for i in range(a, z))):
+            vals.append(None)
+            why.append('소리가 잘림')
+            continue
+        best = None
+        for row in windows:
+            beats = []
+            for a, z in row:
+                v = [db[i] for i in range(a, z) if ok[i] and db[i] is not None]
+                beats.append(sum(v) / len(v) if len(v) >= R['min_voiced_frames'] else None)
+            if any((x is None for x in beats)):
+                continue
+            acc = beats[0] - sum(beats[1:]) / len(beats[1:])
+            best = acc if best is None else max(best, acc)
+        vals.append(None if best is None else round(best, 1))
+        why.append(None if best is not None else '박 창에 소리가 모자람')
+    return (vals, why)
+
+def _align_shift(expert, eok, student, sok, j, per, n, R, turns):
+    edb, sdb = (expert['voice_db'], student['voice_db'])
+    K = int(round(R.get('student_shift_s', 0.0) / (config.ANALYSIS['hop_ms'] / 1000.0)))
+    lo, hi = (j * per, min(n, (j + 1) * per)) if turns else (0, n)
+    cost = {}
+    for k in range(-K, K + 1):
+        d = [edb[i] - sdb[i + k] for i in range(j * per, min(n, (j + 1) * per)) if lo <= i + k < hi and eok[i] and sok[i + k] and (edb[i] is not None) and (sdb[i + k] is not None)]
+        if len(d) >= R.get('align_min_frames', 50):
+            mu = sum(d) / len(d)
+            cost[k] = sum(((x - mu) ** 2 for x in d)) / len(d)
+    if not cost:
+        return None
+    best = min(cost, key=lambda k: (round(cost[k], 6), abs(k)))
+    return best if 0 not in cost or cost[best] <= R.get('align_gain', 0.8) * cost[0] else 0
+
+def first_beat_accents(song_id, expert, student):
+    R = config.SONGS[song_id].get('accent_feedback')
+    if not R or not expert.get('voice_db') or (not student.get('voice_db')):
+        return None
+    tm, hop = (expert['timing'], config.ANALYSIS['hop_ms'] / 1000.0)
+    n = min(len(expert['curve']), len(student['curve']), len(expert['voice_db']), len(student['voice_db']))
+    J = tm['n_jangdan']
+    eok = [c['cents'] is not None for c in expert['curve'][:n]]
+    te, te_why = _jangdan_accents(expert, eok, tm, R, n, hop)
+    ok, own = own_voice(student, n)
+    if ok is None:
+        ts, ts_why, ks = ([None] * J, ['학습자 소리를 반주와 가려낼 수 없음'] * J, [None] * J)
+    else:
+        turns = bool(student.get('live'))
+        per = int(round(tm['jangdan_seconds'] / hop))
+        ks = [_align_shift(expert, eok, student, ok, j, per, n, R, turns) for j in range(J)]
+        ts, ts_why = _jangdan_accents(student, ok, tm, R, n, hop, [sorted({0, k or 0}) for k in ks], turns=turns)
+    eps = 1e-06
+    weak = [j for j in range(J) if te[j] is not None and ts[j] is not None and (te[j] >= R['teacher_min_db'] - eps) and (ts[j] <= te[j] - R['gap_db'] + eps)]
+    return {'teacher': te, 'student': ts, 'weak': weak, 'teacher_why': te_why, 'student_why': ts_why, 'shift': ks, 'own_voice': own}
+
 def _top_lyric(song, xs):
     cnt = {}
     for x in xs:
@@ -68,10 +188,7 @@ def compare(song_id, expert, student):
     over100 = sum((1 for d in adiff if d >= 100)) / len(adiff) * 100
 
     def sobak_label(i):
-        k = int(i * hop / sob)
-        pos = f"{k // tm['sobak_per_jangdan'] + 1}장단 {k % tm['sobak_per_jangdan'] // tm['sobak_per_bak'] + 1}박"
-        w = _lyric_at(song, k)
-        return f'‘{w}’({pos})' if w else pos
+        return place_label(song, tm, int(i * hop / sob))
     sents, nums = ([], {})
     nums['겹치는 시간 비율(%)'] = round(len(both) / n * 100)
     nums['음고 차이 중앙값(cent)'] = round(med)
@@ -106,8 +223,7 @@ def compare(song_id, expert, student):
     shifted.sort(key=lambda x: -abs(x[1]))
     if shifted and abs(shifted[0][1]) >= 50:
         nm, d, cnt = shifted[0]
-        c = ord(nm[-1])
-        eul = '을' if 44032 <= c <= 55203 and (c - 44032) % 28 else '를'
+        eul = _eul(nm)
         sents.append(f"선생님이 '{nm}'{eul} 부를 때, 나는 평균적으로 {abs(round(d))}cent {('높게' if d > 0 else '낮게')} 잡았어요. 다른 음은 더 가깝게 맞았으니 '{nm}'만 따로 들어 보세요.")
     nums['구성음별 차이(cent)'] = {nm: round(d) for nm, d, _ in shifted}
 
@@ -146,14 +262,19 @@ def compare(song_id, expert, student):
         t = f"이 {tm['n_jangdan']}장단에서 떨림이 선생님은 {ne}군데, 나는 {ns}군데 보여요."
         we = _top_lyric(song, [x for v in ge.values() for x in v])
         ws = _top_lyric(song, [x for v in gs.values() for x in v])
+        remark = song.get('tori_vibrato_remark', True)
         if we and ws and (we != ws):
-            t += f' 선생님은 주로 ‘{we}’에서, 나는 ‘{ws}’에서 떨었어요. 어디를 떠는지가 토리의 특징이에요.'
+            t += f' 선생님은 주로 ‘{we}’에서, 나는 ‘{ws}’에서 떨었어요.'
+            if remark:
+                t += ' 어디를 떠는지가 토리의 특징이에요.'
         elif we and ws:
             t += f' 둘 다 ‘{we}’에서 떨었어요.'
         elif we:
             t += f' 선생님은 ‘{we}’에서 떨었는데 내 곡선에는 떨림이 잡히지 않았어요.'
         elif top_e and top_s and (top_e != top_s):
-            t += f" 선생님은 주로 '{top_e}'에서, 나는 '{top_s}'에서 떨었어요. 어느 음을 떠는지가 토리의 특징이에요."
+            t += f" 선생님은 주로 '{top_e}'에서, 나는 '{top_s}'에서 떨었어요."
+            if remark:
+                t += ' 어느 음을 떠는지가 토리의 특징이에요.'
         elif top_e and top_s:
             t += f" 둘 다 '{top_e}'에서 떨었어요."
         elif top_e:
@@ -173,4 +294,22 @@ def compare(song_id, expert, student):
     ve = sum((1 for x in e[:n] if x is not None)) / n * 100
     vs = sum((1 for x in s[:n] if x is not None)) / n * 100
     nums['소리가 잡힌 시간(%) 선생님/나'] = [round(ve), round(vs)]
+    acc = first_beat_accents(song_id, expert, student)
+    if acc:
+        R = song['accent_feedback']
+        J = range(tm['n_jangdan'])
+
+        def shown(v, why):
+            return f'잴 수 없음({why})' if v is None else v
+        nums['첫 박 강세(dB) 선생님'] = {f'{j + 1}장단': shown(acc['teacher'][j], acc['teacher_why'][j]) for j in J}
+        nums['첫 박 강세(dB) 나'] = {f'{j + 1}장단': shown(acc['student'][j], acc['student_why'][j]) for j in J}
+        nums['첫 박 강세: 내 박 창을 옮긴 초'] = {f'{j + 1}장단': round((acc['shift'][j] or 0) * hop, 2) for j in J}
+        nums['첫 박이 약한 장단'] = [f'{j + 1}장단' for j in acc['weak']] or '없음'
+        lo, hi = config.ANALYSIS['voice_band_hz']
+        w0, w1 = R['window_s']
+        nums['첫 박 강세 기준'] = f"강세 = 첫 박 세기 − 나머지 박 세기 평균. 선생님 ≥ {R['teacher_min_db']:g}dB이고 나 ≤ 선생님 − {R['gap_db']:g}dB인 장단을 말한다. 박 세기 = 박 머리 {w0:+g}~{w1:+g}초 안 유성 칸의 목소리({lo:g}~{hi:g}Hz) 세기 평균(dB 평균). 내 박 창은 장단마다 세기 곡선을 선생님에 맞춘 자리(앞뒤 {R.get('student_shift_s', 0.0):g}초 안)와 옮기지 않은 자리에서 재어 큰 값을 쓴다"
+        if acc['weak']:
+            ks = [j * tm['sobak_per_jangdan'] for j in acc['weak']]
+            last = _lyric_at(song, ks[-1]) or place_label(song, tm, ks[-1])
+            sents.append(R['sentence'].format(자리들=', '.join((place_label(song, tm, k) for k in ks)), 조사=_eul(last)))
     return {'summary': sents, 'numbers': nums}
