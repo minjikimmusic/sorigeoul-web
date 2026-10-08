@@ -259,7 +259,7 @@ def compare(song_id, expert, student):
     if ne or ns:
         top_e = max(ge, key=lambda k: len(ge[k])) if ge else None
         top_s = max(gs, key=lambda k: len(gs[k])) if gs else None
-        t = f"이 {tm['n_jangdan']}장단에서 떨림이 선생님은 {ne}군데, 나는 {ns}군데 보여요."
+        t = f"이 {tm['n_jangdan']}장단에서 떠는소리(농현)가 선생님은 {ne}군데, 나는 {ns}군데 보여요."
         we = _top_lyric(song, [x for v in ge.values() for x in v])
         ws = _top_lyric(song, [x for v in gs.values() for x in v])
         remark = song.get('tori_vibrato_remark', True)
@@ -270,7 +270,7 @@ def compare(song_id, expert, student):
         elif we and ws:
             t += f' 둘 다 ‘{we}’에서 떨었어요.'
         elif we:
-            t += f' 선생님은 ‘{we}’에서 떨었는데 내 곡선에는 떨림이 잡히지 않았어요.'
+            t += f' 선생님은 ‘{we}’에서 떨었는데 내 곡선에는 떠는소리가 잡히지 않았어요.'
         elif top_e and top_s and (top_e != top_s):
             t += f" 선생님은 주로 '{top_e}'에서, 나는 '{top_s}'에서 떨었어요."
             if remark:
@@ -278,7 +278,7 @@ def compare(song_id, expert, student):
         elif top_e and top_s:
             t += f" 둘 다 '{top_e}'에서 떨었어요."
         elif top_e:
-            t += f" 선생님은 '{top_e}'에서 떨었는데 내 곡선에는 떨림이 잡히지 않았어요."
+            t += f" 선생님은 '{top_e}'에서 떨었는데 내 곡선에는 떠는소리가 잡히지 않았어요."
         sents.append(t)
 
     def kkeok(d):
@@ -288,9 +288,9 @@ def compare(song_id, expert, student):
     nums['꺾는소리(나)'] = [f"소박 {x['start_sobak']:.1f} {x['note']} {x['kkeok_drop_cents']}cent" for x in ks]
     if ke and (not ks):
         x = ke[0]
-        sents.append(f"선생님은 {sobak_label(int(x['start_sobak'] * sob / hop))} 부근에서 소리를 {round(x['kkeok_drop_cents'])}cent 꺾어 내렸어요. 내 곡선에는 그 꺾임이 보이지 않아요.")
+        sents.append(f"선생님은 {sobak_label(int(x['start_sobak'] * sob / hop))} 부근에서 소리를 {round(x['kkeok_drop_cents'])}cent 꺾어 내렸어요. 내 곡선에는 그 꺾는소리가 보이지 않아요.")
     elif ke and ks and (abs(ke[0]['start_sobak'] - ks[0]['start_sobak']) > 2):
-        sents.append(f"둘 다 소리를 꺾는 곳이 있는데 위치가 달라요. 선생님은 {sobak_label(ke[0]['start_sobak'] * sob / hop)} 부근, 나는 {sobak_label(ks[0]['start_sobak'] * sob / hop)} 부근이에요.")
+        sents.append(f"둘 다 꺾는소리를 낸 곳이 있는데 위치가 달라요. 선생님은 {sobak_label(ke[0]['start_sobak'] * sob / hop)} 부근, 나는 {sobak_label(ks[0]['start_sobak'] * sob / hop)} 부근이에요.")
     ve = sum((1 for x in e[:n] if x is not None)) / n * 100
     vs = sum((1 for x in s[:n] if x is not None)) / n * 100
     nums['소리가 잡힌 시간(%) 선생님/나'] = [round(ve), round(vs)]
