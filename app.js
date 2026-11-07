@@ -52,6 +52,10 @@ const state = {
   compareMode: false,    // true = 미리 녹음해 둔 학습자 가창 비교 보기(마이크를 쓰지 않는다)
   timeline: null, raf: null, result: null,
   mirrorView: { mode: "all", k: 0, lastT: null },   // 소리거울 확대 범위(박 기준 확대)
+  showNumbers: false,    // 선생님용 숫자 보기 — 거울의 cent 숫자와 '연구자 확인용 수치'(학생 화면에서는 끈다)
+  spots: null, spotOn: false, blinkTimer: null,   // 비교 문장을 눌렀을 때 거울에 깜박이는 자리
+  rate: 1,               // 거울 재생 빠르기(1 = 보통, 0.75 = 느리게). 음높이는 그대로(stretchBuffer)
+  stretched: new WeakMap(),   // 원본 버퍼 → 0.75배로 늘인 버퍼
 };
 
 /* ---------------- 공통 ---------------- */
@@ -1003,7 +1007,14 @@ function showResult() {
   const cmp = r.comparison;
   $("compare-box").hidden = !cmp;
   if (cmp) {
-    $("compare-list").innerHTML = cmp.summary.map(x => `<li>${x}</li>`).join("");
+    // 문장 속 자리 표시("3장단 3박")를 찾아 밑줄을 긋고, 누르면 거울의 그 박이 깜박인다.
+    $("compare-list").innerHTML = cmp.summary.map(x =>
+      `<li${/\d+장단 \d+박/.test(x) ? ' class="has-spot" title="누르면 거울에서 그 자리가 깜박여요"' : ''}>${
+        x.replace(/(\d+)장단 (\d+)박/g, "<u>$1장단 $2박</u>")}</li>`).join("");
+    document.querySelectorAll("#compare-list li.has-spot").forEach(li => {
+      li.onclick = () => blinkSpots([...li.textContent.matchAll(/(\d+)장단 (\d+)박/g)]
+        .map(m => [+m[1], +m[2]]));
+    });
     $("compare-nums-body").innerHTML = '<div class="num">' +
       Object.entries(cmp.numbers).map(([k, v]) =>
         `${k}: ${Array.isArray(v) ? v.join(" / ") : (typeof v === "object" ? Object.entries(v).map(([a, b]) => `${a} ${b > 0 ? "+" : ""}${b}`).join(", ") : v)}`
@@ -1021,7 +1032,7 @@ function showResult() {
  * 세로(음높이)도 그 범위의 두 곡선에 맞춰 키운다.
  * ◀ ▶ 는 1박 보기에서 한 박씩, 1장단 보기에서 한 장단씩 옮긴다.
  * 재생 중에는 재생선이 보이던 범위를 지나가면 다음 범위로 넘어간다(책장 넘기듯). */
-const ZOOM_SIZE = { all: 17, jangdan: 19, bak: 22 };   // 확대할수록 가사 글자도 조금 크게
+const ZOOM_SIZE = { all: 19, jangdan: 21, bak: 24 };   // 확대할수록 가사 글자도 조금 크게(2026-11-07 한 치수 키움, 검토자 C)
 
 /** 지금 확대 범위 한 칸의 길이(초). 전체 보기면 null */
 function zoomCell() {
@@ -1083,6 +1094,28 @@ function updateZoomUi() {
   $("btn-zoom-next").disabled = k >= zoomCount() - 1;
 }
 
+/* 비교 문장에서 짚은 자리(장단·박 목록)를 거울 위에 6번 깜박여 보여 준다.
+ * 재생 중이면 재생 화면 위에 깜박이고, 멈춰 있으면 깜박일 때만 다시 그린다. */
+function blinkSpots(spots) {
+  if (!state.tm) return;
+  const sob = state.tm.sobak_seconds, perJ = state.tm.sobak_per_jangdan, perB = state.tm.sobak_per_bak;
+  state.spots = spots.map(([jd, bak]) => {
+    const a = ((jd - 1) * perJ + (bak - 1) * perB) * sob;
+    return { a, b: a + perB * sob };
+  });
+  $("mirror-wrap").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  if (state.blinkTimer) clearInterval(state.blinkTimer);
+  let n = 0;
+  state.spotOn = true;
+  if (!state.mirror) mirrorDraw(null);
+  state.blinkTimer = setInterval(() => {
+    n += 1;
+    state.spotOn = n % 2 === 0;
+    if (n >= 7) { clearInterval(state.blinkTimer); state.blinkTimer = null; state.spots = null; state.spotOn = false; }
+    if (!state.mirror) mirrorDraw(null);
+  }, 350);
+}
+
 function mirrorDraw(tNow) {
   if (!state.result || !state.expert) return;
   const view = mirrorWindow();
@@ -1096,6 +1129,8 @@ function mirrorDraw(tNow) {
     lyrics: { glyphs: songGlyphs(), size: ZOOM_SIZE[state.mirrorView.mode] || 17, active: !!state.mirror },
     selection: state.loopDraft || state.loop,
     view,
+    showNumbers: state.showNumbers,
+    spots: state.spotOn ? state.spots : null,
   });
 }
 function setupMirror() {
@@ -1121,6 +1156,69 @@ function quietLyricBar() {
   $("mirror-lyric").querySelectorAll(".ly.on").forEach(e => e.classList.remove("on"));
   $("mirror-lyric-next").textContent = "";
 }
+/* ---------------- 느리게 듣기(0.75배) ----------------
+ * 2026-11-07 연구자 결정(1차 전문가 검토, 검토자 B '되풀이 듣기 속도 조절' 반영).
+ * 버퍼의 재생 속도를 바꾸면 음높이도 함께 내려가므로, 소리를 미리 '같은 높이로 길게' 늘여 둔다(WSOLA:
+ * 약 40ms 조각을 반씩 겹쳐 이어 붙이되, 이음매가 앞 조각의 파형과 가장 닮는 자리를 ±8ms 안에서 찾아 붙인다).
+ * 곡선·격자·가사는 격자 시각(초) 그대로 그리고, 소리를 걸 때에만 시각·길이에 K(=1/빠르기)를 곱한다.
+ * 늘인 소리의 장단 격자는 몇 ms 안에서 어긋날 수 있다 — 연습용 듣기이지 분석에는 쓰지 않는다. */
+const SLOW_RATE = 0.75;
+
+/** 한 채널 소리를 음높이 그대로 K배 길이로 늘인다. x: Float32Array, sr: 표본율. */
+function stretchMono(x, sr, K) {
+  const win = 1 << Math.round(Math.log2(sr * 0.04));     // 조각 길이 ≈ 40ms
+  if (x.length <= win * 2) return x.slice();
+  const hop = win >> 1;                                   // 출력 쪽 간격(반씩 겹침)
+  const hopIn = Math.round(hop / K);                      // 입력 쪽 간격
+  const search = Math.round(sr * 0.008);                  // 이음매 탐색 폭 ±8ms
+  const w = new Float32Array(win);
+  for (let i = 0; i < win; i++) w[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / win);
+  const outLen = Math.round(x.length * K);
+  const out = new Float32Array(outLen + win);
+  const norm = new Float32Array(outLen + win);
+  let prev = 0;
+  for (let k = 0; k * hop + win <= out.length; k++) {
+    const o = k * hop;
+    let p = Math.min(k * hopIn, x.length - win);
+    if (k > 0) {
+      const c = Math.min(prev + hop, x.length - win);     // 앞 조각이 자연스럽게 이어질 자리
+      let best = -Infinity, bp = p;
+      const lo = Math.max(0, p - search), hi = Math.min(x.length - win, p + search);
+      for (let q = lo; q <= hi; q += 4) {
+        let sum = 0;
+        for (let i = 0; i < win; i += 16) sum += x[c + i] * x[q + i];
+        if (sum > best) { best = sum; bp = q; }
+      }
+      p = bp;
+    }
+    for (let i = 0; i < win; i++) { out[o + i] += x[p + i] * w[i]; norm[o + i] += w[i]; }
+    prev = p;
+  }
+  for (let i = 0; i < outLen; i++) if (norm[i] > 1e-6) out[i] /= norm[i];
+  return out.subarray(0, outLen);
+}
+
+/** 버퍼를 늘여 둔 것(없으면 만들어서 저장). 스테레오면 평균해 모노로 늘인다(곡 음원은 모노다). */
+function stretchBuffer(buf) {
+  let done = state.stretched.get(buf);
+  if (done) return done;
+  const ctx = ensureAudio();
+  let x = buf.getChannelData(0);
+  if (buf.numberOfChannels > 1) {
+    const y = buf.getChannelData(1), m = new Float32Array(x.length);
+    for (let i = 0; i < x.length; i++) m[i] = (x[i] + y[i]) / 2;
+    x = m;
+  }
+  const data = stretchMono(x, buf.sampleRate, 1 / SLOW_RATE);
+  done = ctx.createBuffer(1, data.length, buf.sampleRate);
+  done.getChannelData(0).set(data);
+  state.stretched.set(buf, done);
+  return done;
+}
+
+/** 거울 재생에 쓸 버퍼 — 느리게가 켜져 있으면 늘인 것을 준다 */
+function mirrorBuf(buf) { return !buf || state.rate === 1 ? buf : stretchBuffer(buf); }
+
 function stopMirror() {
   if (state.mirror) {
     cancelAnimationFrame(state.mirror.raf);
@@ -1154,18 +1252,21 @@ function mirrorFrame(t) {
 function playMirrorFull() {
   stopMirror();
   const ctx = ensureAudio();
+  const R = state.rate, K = 1 / R;       // 느리게(0.75)면 늘인 소리를 쓰고, 소리 시각에만 K를 곱한다
   const pre = preroll(), dur = state.tm.total_seconds;
   const t0 = ctx.currentTime + 0.25;
   // 셋을 같은 시각에 걸어 두면 장단 격자·가락선·가사가 하나의 시계로 움직인다
-  playBuf(state.jangdanBuf, t0, 0, dur, true, "jangdan");
-  playBuf(state.expertBuf, t0 - pre, 0, dur + pre, false, "expert");
+  playBuf(mirrorBuf(state.jangdanBuf), t0, 0, dur * K, true, "jangdan");
+  playBuf(mirrorBuf(state.expertBuf), t0 - pre * K, 0, (dur + pre) * K, false, "expert");
   // 내가 부른 녹음이 있으면 그것을 튼다. 비교 보기에서만 학습자의 예시 음원을 쓴다.
   const mine = state.myBuf;
-  if (mine) playBuf(mine, t0, 0, dur, false, "student");
-  else playBuf(state.studentBuf, t0 - pre, 0, dur + pre, false, "student");
-  if (state.mirrorJeonggan) state.mirrorStop = animateJeonggan(state.mirrorJeonggan, ctx, t0, state.jd, t0 + dur);
+  if (mine) playBuf(mirrorBuf(mine), t0, 0, dur * K, false, "student");
+  else playBuf(mirrorBuf(state.studentBuf), t0 - pre * K, 0, (dur + pre) * K, false, "student");
+  if (state.mirrorJeonggan) {
+    state.mirrorStop = animateJeonggan(state.mirrorJeonggan, ctx, t0, state.jd, t0 + dur * K, el => el * R);
+  }
   const tick = () => {
-    const t = ctx.currentTime - t0;
+    const t = (ctx.currentTime - t0) * R;
     if (t > dur + 0.25) { stopMirror(); return; }
     mirrorFrame(t < 0 ? 0 : Math.min(dur, t));
     state.mirror.raf = requestAnimationFrame(tick);
@@ -1250,7 +1351,9 @@ function playMirrorLoop() {
   stopMirror();
   if (!sel) return;
   const ctx = ensureAudio();
-  const pre = preroll(), L = sel.b - sel.a;
+  const R = state.rate, K = 1 / R;       // 느리게면 늘인 소리에서 K배 자리를 자른다(화면은 격자 시각 그대로)
+  const LG = sel.b - sel.a;              // 구간 길이(격자 초)
+  const pre = preroll(), L = LG * K;     // 구간 길이(소리 초)
   // 이음매를 박 선보다 12ms 앞에 둔다. 장구 타점은 박 선보다 몇 ms 먼저 울리기 시작하기도 해서
   // (금다래꿍 반주), 박 선에서 자르면 첫 타점의 머리가 잘리거나 페이드에 묻혀 무뎌진다.
   // 네 소리를 똑같이 당기므로 서로의 어긋남은 없다. 화면(재생선)은 12ms 차이라 그대로 둔다.
@@ -1259,7 +1362,7 @@ function playMirrorLoop() {
   let n = 0;                                    // 다음에 걸 반복 번호
   const schedule = () => {
     while (T0 + n * L < ctx.currentTime + 0.6) {
-      let T = T0 + n * L - SEAM, from = sel.a - SEAM, len = L;
+      let T = T0 + n * L - SEAM, from = sel.a * K - SEAM, len = L;
       // 화면이 잠깐 멈춰(다른 탭 등) 시각이 이미 지났으면, 지난 만큼 건너뛰고 지금부터 이어 튼다.
       // 브라우저는 늦게 건 소리를 앞당겨 주지 않아서, 그대로 걸면 그 한 바퀴만 박이 밀린다.
       const late = ctx.currentTime + 0.005 - T;
@@ -1267,14 +1370,14 @@ function playMirrorLoop() {
       if (late > 0) { T += late; from += late; len -= late; }
       // 음원마다 격자 0초가 파일의 어디인지가 다르다: 선생님·예시 음원은 앞여유(pre)가 있고,
       // 내 녹음은 서버가 분석한 구간 그대로 잘라 붙였으므로 없다(전체 재생과 같은 셈).
-      playSlice(state.jangdanBuf, T, from, len, "jangdan", true);
-      playSlice(state.expertBuf, T, from + pre, len, "expert");
-      if (state.myBuf) playSlice(state.myBuf, T, from, len, "student");
-      else playSlice(state.studentBuf, T, from + pre, len, "student");
+      playSlice(mirrorBuf(state.jangdanBuf), T, from, len, "jangdan", true);
+      playSlice(mirrorBuf(state.expertBuf), T, from + pre * K, len, "expert");
+      if (state.myBuf) playSlice(mirrorBuf(state.myBuf), T, from, len, "student");
+      else playSlice(mirrorBuf(state.studentBuf), T, from + pre * K, len, "student");
       n++;
     }
   };
-  const posAt = el => sel.a + (((el % L) + L) % L);        // 지난 시간 → 구간 안의 격자 시각
+  const posAt = el => sel.a + ((((el * R) % LG) + LG) % LG);   // 지난 소리 시간 → 구간 안의 격자 시각
   schedule();
   if (state.mirrorJeonggan) {
     state.mirrorStop = animateJeonggan(state.mirrorJeonggan, ctx, T0, state.jd, undefined, posAt);
@@ -1313,6 +1416,27 @@ $("btn-mirror-play").onclick = () => {
   if (state.loop) playMirrorLoop(); else playMirrorFull();
 };
 $("btn-loop-clear").onclick = () => clearLoop();
+
+/* 느리게 듣기 켜고 끄기. 처음 켤 때 소리를 늘여 두느라 1~2초쯤 걸릴 수 있어 '준비 중'을 보여 준다. */
+$("btn-mirror-slow").onclick = () => {
+  const btn = $("btn-mirror-slow");
+  const wasPlaying = state.mirror ? (state.mirror.loop ? "loop" : "full") : null;
+  if (state.rate !== 1) {                       // 끄기
+    state.rate = 1;
+    btn.classList.remove("active"); btn.textContent = "🐢 느리게";
+    if (wasPlaying) { stopMirror(); wasPlaying === "loop" ? playMirrorLoop() : playMirrorFull(); }
+    return;
+  }
+  btn.disabled = true; btn.textContent = "준비 중…";
+  setTimeout(() => {                            // 글자가 먼저 바뀌게 늘이는 일은 다음 차례로 미룬다
+    state.rate = SLOW_RATE;
+    for (const b of [state.jangdanBuf, state.expertBuf, state.myBuf || state.studentBuf]) {
+      if (b) mirrorBuf(b);
+    }
+    btn.disabled = false; btn.classList.add("active"); btn.textContent = "🐢 느리게 (켜짐)";
+    if (wasPlaying) { stopMirror(); wasPlaying === "loop" ? playMirrorLoop() : playMirrorFull(); }
+  }, 30);
+};
 
 /* 확대 단추. 확대 범위를 고를 때는 지금 보고 있던 자리(재생 중이면 재생선, 구간이 있으면 그 시작,
  * 이미 확대해 있으면 그 범위의 처음)가 든 칸으로 간다. */
@@ -1391,6 +1515,12 @@ $("mix-student-vol").oninput = e => {
   state.studentVol = +e.target.value;
   showStudentVol();
   refreshGains();
+};
+
+$("show-numbers").onchange = e => {
+  state.showNumbers = e.target.checked;
+  $("compare-nums").hidden = !state.showNumbers;
+  if (!state.mirror) mirrorDraw(null);      // 재생 중이면 다음 장면부터 바뀐다
 };
 
 $("btn-again").onclick = () => { stopMirror(); startSing(state.compareMode); };

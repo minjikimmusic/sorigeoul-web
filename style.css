@@ -1,13 +1,13 @@
 :root {
-  --bg: #F3EEE4;
-  --card: #FCFAF4;
+  --bg: #F8F4EC;      /* 2026-11-07 조금 밝게(전 #F3EEE4, 1차 전문가 검토 반영) */
+  --card: #FFFDF8;    /* 2026-11-07 조금 밝게(전 #FCFAF4) */
   --ink: #191C21;
   --muted: #767C85;
-  --line: #DED8CB;
+  --line: #E4DED2;    /* 2026-11-07 조금 밝게(전 #DED8CB) */
   --expert: #2F4A6E;
   --student: #C06A2D;
   --shade: rgba(230, 200, 120, 0.28);
-  --notice-bg: #F6E6D8;
+  --notice-bg: #F9EDE2;  /* 2026-11-07 조금 밝게(전 #F6E6D8) */
   --card-lift: #FFFDF7;
   --line-strong: #BEB29A;
   /* 첫 화면 — 저채도 2색(쪽빛·황토)과 먹빛. 큰 검은 면도 화려한 그라데이션도 쓰지 않는다. */
@@ -254,6 +254,7 @@ body:has(#screen-select:not([hidden]))::after {
 .score { margin: 0 0 16px; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
 .score img { display: block; width: 100%; max-width: 760px; margin: 0 auto; }
 .score figcaption { text-align: right; color: var(--muted); font-size: 13px; margin-top: 6px; }
+.score .score-note { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 8px 0 0; }
 .jangdan-score { margin-bottom: 10px; padding: 10px 14px 8px; }
 .jangdan-score img { max-width: 540px; }
 
@@ -364,7 +365,7 @@ body:has(#screen-select:not([hidden]))::after {
   box-shadow: 0 2px 5px rgba(40,48,60,0.18), 0 1px 0 #FFFFFF inset;
   font-size: 14px; letter-spacing: 0.18em; font-weight: 700; color: #3F4855; }
 .mirror-emoji { font-size: 22px; letter-spacing: 0; line-height: 1; }
-.mirror-canvas { display: block; width: 100%; height: 340px;
+.mirror-canvas { display: block; width: 100%; height: 400px;   /* 2026-11-07 340→400, 검토자 C '가락선 크게' */
   /* 옆으로 끌어 되풀이 구간을 고른다. 세로로 밀면 화면은 그대로 내려간다(태블릿). */
   cursor: col-resize; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 /* 박 기준 확대 단추 — 거울 바로 위 */
@@ -399,8 +400,9 @@ body:has(#screen-select:not([hidden]))::after {
 .mirror-howto u { text-decoration-color: var(--student); text-decoration-thickness: 2px;
   text-underline-offset: 4px; font-weight: 700; }
 .mirror-hint { color: var(--muted); font-size: 14px; line-height: 1.7; margin: 10px 0 0; }
+.teacher-nums { display: block; margin-top: 14px; color: var(--muted); font-size: 13px; cursor: pointer; }
 @media (max-width: 640px) {
-  .mirror-canvas { height: 260px; }
+  .mirror-canvas { height: 300px; }   /* 2026-11-07 260→300 */
   .mirror-frame { padding: 9px; border-radius: 20px; }
   .mirror-frame::before { inset: 4px; border-radius: 17px; }
   .mirror-title { right: 16px; font-size: 13px; }
@@ -412,9 +414,13 @@ body:has(#screen-select:not([hidden]))::after {
 /* 결과 화면의 '무엇이 다를까' 설명 */
 .compare { background: var(--card); border: 1px solid var(--line); border-left: 6px solid var(--expert);
   border-radius: 12px; padding: 16px 22px; margin: 10px 0 14px; }
-.compare b { font-size: 18px; }
+.compare { font-size: 18px; }                 /* 2026-11-07 결과 글씨 한 치수 크게, 검토자 C */
+.compare b { font-size: 19px; }
 .compare ul { margin: 10px 0 0; padding-left: 22px; }
 .compare li { line-height: 1.75; margin-bottom: 8px; }
+.compare li.has-spot { cursor: pointer; }
+.compare li.has-spot u { text-decoration: underline dotted var(--expert); text-underline-offset: 3px; }
+.compare li.has-spot:hover { color: var(--expert); }
 .compare details { margin-top: 12px; }
 .compare summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 .compare .num { font-size: 14px; color: var(--muted); line-height: 1.8; margin-top: 8px; }
@@ -519,7 +525,7 @@ body:has(#screen-select:not([hidden]))::after {
   height:clamp(50px,8.4vh,82px);
   font-size:clamp(13px,1.8vh,14.5px); }
 
-.feedback { background: #fff; border: 2px solid var(--student); border-radius: 16px; padding: 18px 22px; font-size: 19px; line-height: 1.7; margin: 10px 0 18px; }
+.feedback { background: #fff; border: 2px solid var(--student); border-radius: 16px; padding: 18px 22px; font-size: 20px;   /* 2026-11-07 19→20 */ line-height: 1.7; margin: 10px 0 18px; }
 .result-actions { display: flex; gap: 12px; }
 .alert { background: #FFF1EC; border: 2px solid #E39A7C; border-radius: 14px; padding: 16px 20px; font-size: 18px; }
 canvas.chart.clickable { cursor: pointer; }

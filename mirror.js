@@ -6,7 +6,8 @@
  * 무엇을 보여 주려는 것인가
  *   - 두 선이 가까울수록 닮은 부분, 벌어질수록 다른 부분. 그 사이를 옅은 띠로 채워
  *     '얼마나 벌어져 있는지'가 눈에 바로 들어오게 한다.
- *   - 점수·정오 표시는 하지 않는다. 숫자는 지금 재생 중인 지점의 차이(cent)만 보여 준다.
+ *   - 점수·정오 표시는 하지 않는다. 숫자(지금 재생 중인 지점의 차이, 확대해 볼 때의 cent 눈금)는
+ *     선생님용 '숫자 보기'를 켰을 때(o.showNumbers)만 쓴다(2026-11-06 연구자 결정, 1차 전문가 검토 반영).
  *   - 지나간 부분은 진하게, 앞으로 올 부분은 흐리게 그려서 선이 '그려지는' 느낌을 준다.
  *   - 거울면(본청선) 아래쪽에 두 선을 뒤집어 비친 반사를 옅게 깔아 깊이감을 준다.
  *     반사는 장식이고 읽는 대상은 위쪽 선이다.
@@ -100,7 +101,7 @@ function drawMirror(canvas, o) {
       const y = Y(c);
       ctx.strokeStyle = "rgba(140,130,110,0.12)"; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
-      if (y < padT + plotH - 16) sideLabels.push({ text: `${c > 0 ? "+" : ""}${c}`, y: y - 3 });   // 아래 줄은 소박 이름 자리
+      if (o.showNumbers && y < padT + plotH - 16) sideLabels.push({ text: `${c > 0 ? "+" : ""}${c}`, y: y - 3 });   // 아래 줄은 소박 이름 자리
     }
   }
 
@@ -110,6 +111,14 @@ function drawMirror(canvas, o) {
   if (sel) {
     ctx.fillStyle = "rgba(47,74,110,0.06)";
     ctx.fillRect(sel.xa, padT - 6, sel.xb - sel.xa, plotH + 6);
+  }
+
+  /* 비교 문장에서 짚은 자리 — 누르면 그 박이 깜박인다(o.spots, 2026-11-07 검토자 B·C 반영) */
+  for (const sp of o.spots || []) {
+    const xa = clampX(X(sp.a)), xb = clampX(X(sp.b));
+    if (xb <= xa) continue;
+    ctx.fillStyle = "rgba(230, 170, 60, 0.30)";
+    ctx.fillRect(xa, padT - 6, xb - xa, plotH + 6);
   }
 
   /* 거울면 = 본청선 (확대해 본청이 범위 밖이면 긋지 않는다) */
@@ -242,6 +251,8 @@ function drawMirror(canvas, o) {
       } else {
         ctx.strokeStyle = "rgba(140,110,70,0.5)"; ctx.setLineDash([3, 3]); ctx.lineWidth = 1.2;
         ctx.beginPath(); ctx.moveTo(x, pe.y); ctx.lineTo(x, ps.y); ctx.stroke(); ctx.setLineDash([]);
+      }
+      if (d >= 50 && o.showNumbers) {
         ctx.font = "600 12px system-ui";
         const label = `${Math.round(d)}`;
         // 오른쪽 끝 가까이에서는 재생선 왼쪽에 쓴다(끝의 눈금 숫자와 겹치거나 잘리지 않게).

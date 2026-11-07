@@ -86,8 +86,8 @@
 </script>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>소리거울 · 웹</title>
-  <link rel="stylesheet" href="style.css?v=1d4c9e5eee2e" />
-<script>window.__V="1d4c9e5eee2e";</script></head>
+  <link rel="stylesheet" href="style.css?v=21bfa2c0afac" />
+<script>window.__V="21bfa2c0afac";</script></head>
 <body>
   <header class="topbar">
     <button id="btn-home" class="brand" title="처음으로">소리거울</button>
@@ -208,6 +208,10 @@
     <figure class="score">
       <img id="intro-score" alt="악보" />
       <figcaption id="intro-score-caption"></figcaption>
+      <!-- 악보와 선생님 소리의 시김새 자리가 다르다는 1차 전문가 검토 의견에 대한 안내(문장: 2026-11-07 연구자 지정).
+           악보에 시김새 자리를 그려 넣는 것은 후속 과제로 두고, 우선 이 안내로 알린다. 네 곡 모두 같다.
+           (11-06 첫 문장 '악보는 노래의 뼈대 가락이에요…'는 악보에 이미 떠는 표가 있는 곡과 맞지 않아 바꿨다.) -->
+      <p class="score-note">선생님 소리에는 악보에 적힌 것보다 시김새가 풍부하게 들어 있을 수 있어요. 시김새는 국악의 멋을 더욱 살려줍니다.</p>
     </figure>
     <p id="intro-text" class="intro-text"></p>
     <div class="intro-actions">
@@ -295,6 +299,8 @@
       <div id="mirror-jeonggan"></div>
       <div class="mirror-bar">
         <button id="btn-mirror-play" class="btn primary">▶ 거울 보기</button>
+        <!-- 느리게 듣기(0.75배). 음높이는 그대로 두고 빠르기만 줄인다(2026-11-07, 1차 전문가 검토 반영) -->
+        <button id="btn-mirror-slow" class="btn secondary" title="음높이는 그대로 두고 0.75배 빠르기로 들려줘요">🐢 느리게</button>
         <!-- 거울 위를 끌어 고른 되풀이 구간. 고르기 전에는 숨겨 둔다. -->
         <span class="mirror-loop" id="mirror-loop" hidden>
           <b id="mirror-loop-label"></b>
@@ -321,7 +327,7 @@
         <u>거울을 한 번 누르면</u> 고른 구간이 지워져요.
         <u>[1장단] [1박]</u>을 누르면 그만큼만 크게 보고, ◀ ▶ 로 옮겨 가요.</span></p>
       <p class="mirror-hint">두 선이 가까울수록 닮게 부른 곳, 벌어질수록 다르게 부른 곳이에요.
-        사이가 벌어지면 옅은 띠가 진해지고, 지금 재생 중인 지점의 차이가 숫자(cent)로 보입니다.
+        사이가 벌어지면 옅은 띠가 진해집니다.
         맞고 틀림이 아니라 <b>어떻게 닮고 어떻게 다른지</b>를 보는 거울이에요.</p>
     </section>
 
@@ -330,7 +336,7 @@
     <div class="compare" id="compare-box" hidden>
       <b>무엇이 같고 무엇이 다를까요?</b>
       <ul id="compare-list"></ul>
-      <details id="compare-nums"><summary>연구자 확인용 수치</summary><div id="compare-nums-body"></div></details>
+      <details id="compare-nums" hidden><summary>연구자 확인용 수치</summary><div id="compare-nums-body"></div></details>
     </div>
     <div class="feedback" id="feedback"></div>
     <div class="result-actions">
@@ -338,19 +344,22 @@
       <button id="btn-other" class="btn secondary">다른 노래 고르기</button>
     </div>
     <p class="note" id="result-note"></p>
+    <!-- 학생 화면에서는 숫자(cent)를 숨기고 선생님이 켜면 보인다(2026-11-06 연구자 결정, 1차 전문가 검토 반영):
+         거울의 재생 지점 차이·확대 눈금 숫자와 '연구자 확인용 수치'. 켠 상태는 저장하지 않는다(새로 열면 꺼져 있다). -->
+    <label class="teacher-nums"><input type="checkbox" id="show-numbers" autocomplete="off"> 선생님용: 숫자(cent)와 연구자 확인용 수치 보기</label>
   </section>
 
   <!-- 휴대폰·태블릿(손가락이 주 입력인 기기)으로 열었을 때만 페이지 맨 아래에 보이는 안내(2026-10-07 연구자 요청).
        컴퓨터(마우스·트랙패드)에서는 style.css가 숨긴다. -->
   <p class="pc-note" id="pc-note">소리거울은 시각적 구성과 기능적 운용을 고려하여 PC 환경에 최적화되어 있습니다.</p>
 
-  <script src="recorder.js?v=1d4c9e5eee2e"></script>
-  <script src="jangdan.js?v=1d4c9e5eee2e"></script>
-  <script src="lyrics.js?v=1d4c9e5eee2e"></script>
-  <script src="chart.js?v=1d4c9e5eee2e"></script>
-  <script src="mirror.js?v=1d4c9e5eee2e"></script>
-  <script src="latency.js?v=1d4c9e5eee2e"></script>
-  <script src="analyzer.js?v=1d4c9e5eee2e"></script>
-  <script src="app.js?v=1d4c9e5eee2e"></script>
+  <script src="recorder.js?v=21bfa2c0afac"></script>
+  <script src="jangdan.js?v=21bfa2c0afac"></script>
+  <script src="lyrics.js?v=21bfa2c0afac"></script>
+  <script src="chart.js?v=21bfa2c0afac"></script>
+  <script src="mirror.js?v=21bfa2c0afac"></script>
+  <script src="latency.js?v=21bfa2c0afac"></script>
+  <script src="analyzer.js?v=21bfa2c0afac"></script>
+  <script src="app.js?v=21bfa2c0afac"></script>
 </body>
 </html>

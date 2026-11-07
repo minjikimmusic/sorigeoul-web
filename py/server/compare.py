@@ -172,6 +172,21 @@ def _note_of(song, c, tol=150):
             best, bn = (abs(c - cv), nm)
     return bn
 
+def _drop_spots(song, d, D, sob, hop):
+    c = _cents(d['curve'])
+    out = []
+    for x in d['segments']:
+        if not x.get('kkeok_drop_cents'):
+            continue
+        a, b = (int(round(x['start_sobak'] * sob / hop)), int(round(x['end_sobak'] * sob / hop)))
+        hi, lo = (_median(c[max(0, a - 8):a + 2]), _median(c[max(0, b - 2):b + 8]))
+        if hi is None or lo is None:
+            continue
+        hi, lo = (_note_of(song, hi), _note_of(song, lo))
+        if hi in D['from'] and lo in D['to']:
+            out.append({'start_sobak': x['start_sobak'], 'from': hi, 'to': lo})
+    return out
+
 def compare(song_id, expert, student):
     song = config.SONGS[song_id]
     tm = expert['timing']
@@ -194,11 +209,11 @@ def compare(song_id, expert, student):
     nums['음고 차이 중앙값(cent)'] = round(med)
     nums['반음 이상 벌어진 시간(%)'] = round(over100)
     if med <= 50:
-        sents.append(f'전체적으로는 선생님과 아주 비슷하게 불렀어요. 두 곡선의 높이 차이가 보통 {round(med)}cent (반음의 {med / 100:.1f}배)쯤이에요.')
+        sents.append('전체적으로는 선생님과 아주 비슷하게 불렀어요. 두 곡선의 높이 차이가 반음의 절반이 안 돼요.')
     elif med <= 100:
-        sents.append(f'전체적인 가락의 흐름은 선생님과 닮았어요. 높이 차이는 보통 {round(med)}cent 정도예요.')
+        sents.append('전체적인 가락의 흐름은 선생님과 닮았어요. 높이 차이는 반음 안쪽이에요.')
     else:
-        sents.append(f'두 곡선의 높이가 보통 {round(med)}cent(반음 {med / 100:.1f}배) 떨어져 있어요. 먼저 본청(가운데 가로선)에 맞추어 보면 좋겠어요.')
+        sents.append('두 곡선의 높이가 반음 넘게 떨어져 있어요. 먼저 본청(가운데 가로선)에 맞추어 보면 좋겠어요.')
     n_sob = tm['total_sobak']
     per_sob = []
     for k in range(n_sob):
@@ -211,7 +226,7 @@ def compare(song_id, expert, student):
         parts = []
         for a, b in sorted(rs):
             d = _median(per_sob[a:b])
-            parts.append(f"{sobak_label(int(a * sob / hop))} 부근(내가 약 {abs(round(d))}cent {('더 높게' if d > 0 else '더 낮게')})")
+            parts.append(f"{sobak_label(int(a * sob / hop))} 부근(내가 {('더 높게' if d > 0 else '더 낮게')})")
         sents.append('가장 많이 갈라지는 곳은 ' + ', '.join(parts) + '이에요. 거울에서 그 부분을 옆으로 끌어 되풀이해 들어 보세요.')
         nums['크게 갈리는 소박'] = [f'소박 {a + 1}~{b} ({round(_median(per_sob[a:b]))}cent)' for a, b in sorted(rs)]
     per = {}
@@ -224,7 +239,7 @@ def compare(song_id, expert, student):
     if shifted and abs(shifted[0][1]) >= 50:
         nm, d, cnt = shifted[0]
         eul = _eul(nm)
-        sents.append(f"선생님이 '{nm}'{eul} 부를 때, 나는 평균적으로 {abs(round(d))}cent {('높게' if d > 0 else '낮게')} 잡았어요. 다른 음은 더 가깝게 맞았으니 '{nm}'만 따로 들어 보세요.")
+        sents.append(f"선생님이 '{nm}'{eul} 부를 때, 나는 평균적으로 {('높게' if d > 0 else '낮게')} 잡았어요. 다른 음은 더 가깝게 맞았으니 '{nm}'만 따로 들어 보세요.")
     nums['구성음별 차이(cent)'] = {nm: round(d) for nm, d, _ in shifted}
 
     def steady(cur):
@@ -280,17 +295,16 @@ def compare(song_id, expert, student):
         elif top_e:
             t += f" 선생님은 '{top_e}'에서 떨었는데 내 곡선에는 떠는소리가 잡히지 않았어요."
         sents.append(t)
-
-    def kkeok(d):
-        return [x for x in d['segments'] if x.get('kkeok_drop_cents')]
-    ke, ks = (kkeok(expert), kkeok(student))
-    nums['꺾는소리(선생님)'] = [f"소박 {x['start_sobak']:.1f} {x['note']} {x['kkeok_drop_cents']}cent" for x in ke]
-    nums['꺾는소리(나)'] = [f"소박 {x['start_sobak']:.1f} {x['note']} {x['kkeok_drop_cents']}cent" for x in ks]
-    if ke and (not ks):
-        x = ke[0]
-        sents.append(f"선생님은 {sobak_label(int(x['start_sobak'] * sob / hop))} 부근에서 소리를 {round(x['kkeok_drop_cents'])}cent 꺾어 내렸어요. 내 곡선에는 그 꺾는소리가 보이지 않아요.")
-    elif ke and ks and (abs(ke[0]['start_sobak'] - ks[0]['start_sobak']) > 2):
-        sents.append(f"둘 다 꺾는소리를 낸 곳이 있는데 위치가 달라요. 선생님은 {sobak_label(ke[0]['start_sobak'] * sob / hop)} 부근, 나는 {sobak_label(ks[0]['start_sobak'] * sob / hop)} 부근이에요.")
+    D = song.get('drop_feedback')
+    if D:
+        de, ds = (_drop_spots(song, expert, D, sob, hop), _drop_spots(song, student, D, sob, hop))
+        nums[f"{D['name']}(선생님)"] = [f"{sobak_label(x['start_sobak'] * sob / hop)} {x['from']}→{x['to']}" for x in de]
+        nums[f"{D['name']}(나)"] = [f"{sobak_label(x['start_sobak'] * sob / hop)} {x['from']}→{x['to']}" for x in ds]
+        miss = [x for x in de if not any((abs(x['start_sobak'] - y['start_sobak']) <= 2 for y in ds))]
+        if miss:
+            sents.append(f"선생님은 {sobak_label(miss[0]['start_sobak'] * sob / hop)} 부근에서 {D['did']}. 내 곡선에는 그 자리에 {D['name']}가 보이지 않아요.")
+        elif de:
+            sents.append(f"선생님처럼 {sobak_label(de[0]['start_sobak'] * sob / hop)} 부근에서 {D['did']}.")
     ve = sum((1 for x in e[:n] if x is not None)) / n * 100
     vs = sum((1 for x in s[:n] if x is not None)) / n * 100
     nums['소리가 잡힌 시간(%) 선생님/나'] = [round(ve), round(vs)]
